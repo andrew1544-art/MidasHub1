@@ -25,26 +25,35 @@ function HomeInner() {
   const { user, setShowAuth } = useStore();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const [mounted, setMounted] = useState(false);
   const [visibleCards, setVisibleCards] = useState(0);
 
+  useEffect(() => { setMounted(true); }, []);
   useEffect(() => { if (user) router.push('/feed'); }, [user, router]);
   useEffect(() => { if (searchParams.get('verified') === 'true') setShowAuth(true, 'login'); }, [searchParams, setShowAuth]);
 
-  // Stagger feed preview cards
   useEffect(() => {
+    if (!mounted) return;
     const timer = setInterval(() => {
       setVisibleCards(prev => prev < FEED_PREVIEW.length ? prev + 1 : prev);
     }, 200);
     return () => clearInterval(timer);
-  }, []);
+  }, [mounted]);
+
+  // Stagger helper — returns style that transitions from invisible to visible
+  const fadeUp = (delay = 0) => ({
+    opacity: mounted ? 1 : 0,
+    transform: mounted ? 'translateY(0)' : 'translateY(20px)',
+    transition: `opacity 0.6s ease ${delay}s, transform 0.6s ease ${delay}s`,
+  });
 
   return (
     <AppShell>
       <div className="relative">
 
         {/* ===== HERO ===== */}
-        <section className="relative min-h-[92vh] flex items-center overflow-hidden">
-          {/* Animated orbs */}
+        <section className="relative min-h-[90vh] flex items-center overflow-hidden">
+          {/* Background effects */}
           <div className="absolute inset-0 pointer-events-none overflow-hidden">
             <div className="absolute w-[500px] h-[500px] rounded-full top-[-10%] left-[-5%] opacity-30"
               style={{ background: 'radial-gradient(circle, rgba(255,215,0,0.15) 0%, transparent 70%)', animation: 'heroFloat 12s ease-in-out infinite' }} />
@@ -52,7 +61,6 @@ function HomeInner() {
               style={{ background: 'radial-gradient(circle, rgba(255,165,0,0.12) 0%, transparent 70%)', animation: 'heroFloat 15s ease-in-out infinite reverse' }} />
             <div className="absolute w-[300px] h-[300px] rounded-full top-[40%] left-[50%] opacity-20"
               style={{ background: 'radial-gradient(circle, rgba(99,102,241,0.1) 0%, transparent 70%)', animation: 'heroFloat 10s ease-in-out infinite 2s' }} />
-            {/* Grid lines */}
             <div className="absolute inset-0 opacity-[0.02]"
               style={{ backgroundImage: 'linear-gradient(rgba(255,215,0,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(255,215,0,0.3) 1px, transparent 1px)', backgroundSize: '60px 60px' }} />
           </div>
@@ -62,23 +70,16 @@ function HomeInner() {
 
               {/* Left — Copy */}
               <div className="relative z-10 text-center lg:text-left pt-8 lg:pt-0">
-                {/* Badge */}
                 <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full mb-6 text-sm font-semibold"
-                  style={{ background: 'rgba(255,215,0,0.08)', border: '1px solid rgba(255,215,0,0.15)', color: '#FFD700', animation: 'slideUp 0.6s ease-out' }}>
+                  style={{ ...fadeUp(0.1), background: 'rgba(255,215,0,0.08)', border: '1px solid rgba(255,215,0,0.15)', color: '#FFD700' }}>
                   <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
                   Live now — Join thousands of people
                 </div>
 
-                <h1 className="text-[clamp(2.5rem,6vw,4.5rem)] font-black leading-[1.05] mb-6"
-                  style={{ animation: 'slideUp 0.7s ease-out 0.1s both' }}>
+                <h1 style={fadeUp(0.2)}
+                  className="text-[clamp(2.5rem,6vw,4.5rem)] font-black leading-[1.05] mb-6">
                   All Your{' '}
-                  <span className="relative inline-block">
-                    <span className="accent-text">Socials</span>
-                    <svg className="absolute -bottom-1 left-0 w-full" viewBox="0 0 200 8" fill="none" style={{ animation: 'drawLine 1s ease-out 1s both' }}>
-                      <path d="M2 5.5C50 2 150 2 198 5.5" stroke="url(#gold)" strokeWidth="3" strokeLinecap="round" />
-                      <defs><linearGradient id="gold" x1="0" y1="0" x2="200" y2="0"><stop stopColor="#FFD700"/><stop offset="1" stopColor="#FFA500"/></linearGradient></defs>
-                    </svg>
-                  </span>
+                  <span className="accent-text">Socials</span>
                   <br />
                   One{' '}
                   <span className="relative inline-block">
@@ -87,14 +88,12 @@ function HomeInner() {
                   </span>
                 </h1>
 
-                <p className="text-base sm:text-lg text-white/45 max-w-lg leading-relaxed mb-8 mx-auto lg:mx-0"
-                  style={{ animation: 'slideUp 0.7s ease-out 0.2s both' }}>
+                <p style={fadeUp(0.3)}
+                  className="text-base sm:text-lg text-white/45 max-w-lg leading-relaxed mb-8 mx-auto lg:mx-0">
                   Stop switching apps. See everything your friends post on Snapchat, Instagram, TikTok, X, Facebook, YouTube — all in one beautiful feed. No friend requests needed.
                 </p>
 
-                {/* CTA Buttons */}
-                <div className="flex flex-col sm:flex-row gap-3 justify-center lg:justify-start mb-8"
-                  style={{ animation: 'slideUp 0.7s ease-out 0.3s both' }}>
+                <div style={fadeUp(0.4)} className="flex flex-col sm:flex-row gap-3 justify-center lg:justify-start mb-8">
                   <button onClick={() => setShowAuth(true, 'signup')}
                     className="group relative px-8 py-4 rounded-2xl font-bold text-base text-black overflow-hidden transition-all hover:scale-[1.02] hover:shadow-[0_0_30px_rgba(255,215,0,0.3)]"
                     style={{ background: 'linear-gradient(135deg, #FFD700, #FFA500)' }}>
@@ -110,9 +109,7 @@ function HomeInner() {
                   </button>
                 </div>
 
-                {/* Stats row */}
-                <div className="grid grid-cols-4 gap-4 max-w-md mx-auto lg:mx-0"
-                  style={{ animation: 'slideUp 0.7s ease-out 0.4s both' }}>
+                <div style={fadeUp(0.5)} className="grid grid-cols-4 gap-4 max-w-md mx-auto lg:mx-0">
                   {STATS.map((stat, i) => (
                     <div key={i} className="text-center lg:text-left">
                       <div className="text-xl sm:text-2xl font-black accent-text">{stat.value}</div>
@@ -123,13 +120,11 @@ function HomeInner() {
               </div>
 
               {/* Right — Live feed preview */}
-              <div className="relative z-10 hidden sm:block" style={{ animation: 'slideUp 0.8s ease-out 0.3s both' }}>
+              <div className="relative z-10 hidden sm:block" style={fadeUp(0.4)}>
                 <div className="relative">
-                  {/* Phone frame mockup */}
                   <div className="relative mx-auto max-w-sm rounded-[2rem] p-[2px] overflow-hidden"
                     style={{ background: 'linear-gradient(135deg, rgba(255,215,0,0.3), rgba(255,165,0,0.1), rgba(99,102,241,0.2))' }}>
                     <div className="rounded-[calc(2rem-2px)] overflow-hidden" style={{ background: 'var(--bg)' }}>
-                      {/* Status bar */}
                       <div className="flex items-center justify-between px-6 py-3" style={{ background: 'var(--card)' }}>
                         <div className="flex items-center gap-2">
                           <span className="text-base">⚡</span>
@@ -142,17 +137,16 @@ function HomeInner() {
                         </div>
                       </div>
 
-                      {/* Feed cards */}
                       <div className="px-3 py-2 space-y-2 h-[420px] overflow-hidden">
                         {FEED_PREVIEW.map((post, i) => (
                           <div key={i}
-                            className="rounded-xl p-3 transition-all duration-500"
+                            className="rounded-xl p-3"
                             style={{
                               background: 'var(--card)',
                               border: '1px solid var(--border)',
                               opacity: i < visibleCards ? 1 : 0,
                               transform: i < visibleCards ? 'translateY(0)' : 'translateY(12px)',
-                              transitionDelay: `${i * 80}ms`,
+                              transition: `opacity 0.4s ease ${i * 0.08}s, transform 0.4s ease ${i * 0.08}s`,
                             }}>
                             <div className="flex items-center gap-2 mb-1.5">
                               <span className="text-lg">{post.avatar}</span>
@@ -180,7 +174,6 @@ function HomeInner() {
                     </div>
                   </div>
 
-                  {/* Floating platform badges around the phone */}
                   {[
                     { icon: '👻', color: '#FFFC00', top: '8%', left: '-8%', delay: '0s' },
                     { icon: '📸', color: '#E4405F', top: '25%', right: '-10%', delay: '0.5s' },
@@ -191,8 +184,7 @@ function HomeInner() {
                   ].map((badge, i) => (
                     <div key={i} className="absolute w-10 h-10 rounded-xl flex items-center justify-center text-lg shadow-lg"
                       style={{
-                        background: `${badge.color}15`,
-                        border: `1px solid ${badge.color}30`,
+                        background: `${badge.color}15`, border: `1px solid ${badge.color}30`,
                         top: badge.top, bottom: badge.bottom, left: badge.left, right: badge.right,
                         animation: `badgeFloat 4s ease-in-out infinite ${badge.delay}`,
                       }}>
@@ -249,7 +241,6 @@ function HomeInner() {
                     <h3 className="text-lg font-bold mb-2">{item.title}</h3>
                     <p className="text-sm text-white/35 leading-relaxed">{item.desc}</p>
                   </div>
-                  {/* Connector line */}
                   {i < 2 && (
                     <div className="hidden sm:block absolute top-1/2 -right-3 w-6 text-white/10 text-center text-lg">→</div>
                   )}
@@ -271,12 +262,12 @@ function HomeInner() {
 
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {[
-                { icon: '🔥', title: 'Viral Discovery', desc: 'Posts auto-trend at 100+ likes. No algorithm hiding your content. Pure organic reach for everyone.', accent: '#ef4444' },
+                { icon: '🔥', title: 'Viral Discovery', desc: 'Posts auto-trend at 100+ likes. No algorithm hiding your content. Pure organic reach.', accent: '#ef4444' },
                 { icon: '💬', title: 'Real-time Chat', desc: 'Message anyone instantly. No friend request needed to see posts. Connect freely.', accent: '#22d3ee' },
-                { icon: '🚀', title: 'Cross-Post', desc: 'One-click buttons to jump to Snap, IG, TikTok, X and post there too. Share everywhere.', accent: '#8b5cf6' },
-                { icon: '🛡️', title: 'Verified Users', desc: 'Email verification keeps accounts real. No bots. No fakes. Real people only.', accent: '#22c55e' },
-                { icon: '👥', title: 'Find Anyone', desc: 'Discover people from all platforms. Add friends, build your network, grow your reach.', accent: '#f97316' },
-                { icon: '♾️', title: 'Zero Limits', desc: 'No character limits. No daily caps. No content restrictions. Post whatever you want, whenever.', accent: '#FFD700' },
+                { icon: '🚀', title: 'Cross-Post', desc: 'One-click buttons to jump to Snap, IG, TikTok, X and post there too.', accent: '#8b5cf6' },
+                { icon: '🛡️', title: 'Verified Users', desc: 'Email verification keeps accounts real. No bots. No fakes.', accent: '#22c55e' },
+                { icon: '👥', title: 'Find Anyone', desc: 'Discover people from all platforms. Add friends, build your network.', accent: '#f97316' },
+                { icon: '♾️', title: 'Zero Limits', desc: 'No character limits. No daily caps. No restrictions. Post whatever, whenever.', accent: '#FFD700' },
               ].map((feature, i) => (
                 <div key={i} className="glass-light rounded-2xl p-5 hover-lift group cursor-default">
                   <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl mb-3 transition-transform group-hover:scale-110"
@@ -291,51 +282,34 @@ function HomeInner() {
           </div>
         </section>
 
-        {/* ===== SOCIAL PROOF ===== */}
+        {/* ===== CTA ===== */}
         <section className="py-16 sm:py-24">
           <div className="max-w-4xl mx-auto px-4">
             <div className="relative rounded-3xl overflow-hidden p-8 sm:p-14 text-center"
-              style={{ background: 'linear-gradient(135deg, rgba(255,215,0,0.06), rgba(255,165,0,0.03), rgba(99,102,241,0.04))' , border: '1px solid rgba(255,215,0,0.1)' }}>
-              {/* Background decoration */}
+              style={{ background: 'linear-gradient(135deg, rgba(255,215,0,0.06), rgba(255,165,0,0.03), rgba(99,102,241,0.04))', border: '1px solid rgba(255,215,0,0.1)' }}>
               <div className="absolute inset-0 opacity-5" style={{
-                backgroundImage: 'radial-gradient(circle at 20% 50%, #FFD700 1px, transparent 1px), radial-gradient(circle at 80% 20%, #FFA500 1px, transparent 1px), radial-gradient(circle at 60% 80%, #6366f1 1px, transparent 1px)',
-                backgroundSize: '60px 60px, 80px 80px, 50px 50px'
+                backgroundImage: 'radial-gradient(circle at 20% 50%, #FFD700 1px, transparent 1px), radial-gradient(circle at 80% 20%, #FFA500 1px, transparent 1px)',
+                backgroundSize: '60px 60px, 80px 80px'
               }} />
-
               <div className="relative z-10">
-                {/* Avatars row */}
                 <div className="flex items-center justify-center -space-x-2 mb-6">
-                  {['🧑🏾', '👩🏽', '👨🏼', '👩🏿', '👨🏻', '👩🏻', '🧑🏻', '👩🏾'].map((emoji, i) => (
+                  {['🧑🏾','👩🏽','👨🏼','👩🏿','👨🏻','👩🏻','🧑🏻','👩🏾'].map((emoji, i) => (
                     <div key={i} className="w-10 h-10 rounded-full flex items-center justify-center text-xl ring-2"
-                      style={{ background: 'var(--card)', ringColor: 'var(--bg)', animationDelay: `${i * 0.1}s` }}>
-                      {emoji}
-                    </div>
+                      style={{ background: 'var(--card)', ringColor: 'var(--bg)' }}>{emoji}</div>
                   ))}
                   <div className="w-10 h-10 rounded-full flex items-center justify-center text-[10px] font-bold ring-2"
-                    style={{ background: 'rgba(255,215,0,0.15)', color: '#FFD700', ringColor: 'var(--bg)' }}>
-                    +999
-                  </div>
+                    style={{ background: 'rgba(255,215,0,0.15)', color: '#FFD700', ringColor: 'var(--bg)' }}>+999</div>
                 </div>
-
-                <h2 className="text-3xl sm:text-4xl font-black mb-4">
-                  Ready to see{' '}<span className="accent-text">everything</span>?
-                </h2>
+                <h2 className="text-3xl sm:text-4xl font-black mb-4">Ready to see{' '}<span className="accent-text">everything</span>?</h2>
                 <p className="text-white/35 text-base sm:text-lg mb-8 max-w-lg mx-auto leading-relaxed">
                   Your friends are already here. Every meme, every story, every post — one place, zero effort.
                 </p>
-
                 <button onClick={() => setShowAuth(true, 'signup')}
                   className="group px-10 py-4 rounded-2xl font-bold text-base text-black transition-all hover:scale-[1.02] hover:shadow-[0_0_40px_rgba(255,215,0,0.25)]"
                   style={{ background: 'linear-gradient(135deg, #FFD700, #FFA500)' }}>
-                  <span className="flex items-center gap-2">
-                    Create Free Account
-                    <span className="group-hover:translate-x-1 transition-transform">⚡</span>
-                  </span>
+                  <span className="flex items-center gap-2">Create Free Account <span className="group-hover:translate-x-1 transition-transform">⚡</span></span>
                 </button>
-
-                <p className="text-[11px] text-white/15 mt-4 tracking-wide">
-                  Free forever · No credit card · Ages 15+ · Email verification
-                </p>
+                <p className="text-[11px] text-white/15 mt-4 tracking-wide">Free forever · No credit card · Ages 15+ · Email verification</p>
               </div>
             </div>
           </div>
@@ -350,22 +324,14 @@ function HomeInner() {
             </div>
             <p className="text-xs text-white/15">All your socials, one place. © {new Date().getFullYear()} MidasHub</p>
             <div className="flex items-center justify-center gap-4 mt-3">
-              {[
-                { label: 'Feed', href: '/feed' },
-                { label: 'People', href: '/people' },
-                { label: 'Viral', href: '/viral' },
-              ].map((link, i) => (
-                <button key={i} onClick={() => router.push(link.href)} className="text-xs text-white/20 hover:text-white/50 transition">
-                  {link.label}
-                </button>
+              {[{ label: 'Feed', href: '/feed' }, { label: 'People', href: '/people' }, { label: 'Viral', href: '/viral' }].map((link, i) => (
+                <button key={i} onClick={() => router.push(link.href)} className="text-xs text-white/20 hover:text-white/50 transition">{link.label}</button>
               ))}
             </div>
           </div>
         </footer>
-
       </div>
 
-      {/* Extra keyframes */}
       <style jsx global>{`
         @keyframes heroFloat {
           0%, 100% { transform: translate(0, 0) scale(1); }
@@ -380,10 +346,6 @@ function HomeInner() {
           0%, 100% { opacity: 1; transform: scale(1) rotate(0deg); }
           50% { opacity: 0.6; transform: scale(1.2) rotate(10deg); }
         }
-        @keyframes drawLine {
-          from { stroke-dasharray: 200; stroke-dashoffset: 200; }
-          to { stroke-dasharray: 200; stroke-dashoffset: 0; }
-        }
       `}</style>
     </AppShell>
   );
@@ -392,9 +354,9 @@ function HomeInner() {
 export default function Home() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--bg, #0a0a0f)' }}>
+      <div className="min-h-screen flex items-center justify-center" style={{ background: '#0a0a0f' }}>
         <div className="text-center">
-          <div className="text-5xl mb-3" style={{ animation: 'pulse 2s ease-in-out infinite' }}>⚡</div>
+          <div className="text-5xl mb-3 animate-pulse">⚡</div>
           <div className="text-sm font-bold" style={{ color: '#FFD700' }}>Loading MidasHub...</div>
         </div>
       </div>
