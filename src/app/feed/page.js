@@ -17,28 +17,31 @@ export default function FeedPage() {
   const PAGE_SIZE = 20;
 
   const fetchPosts = useCallback(async (pageNum = 0, append = false) => {
-    const supabase = createClient();
-    let query = supabase.from('posts').select('*, profiles(*)').order('created_at', { ascending: false }).range(pageNum * PAGE_SIZE, (pageNum + 1) * PAGE_SIZE - 1);
-    if (filter !== 'all') query = query.eq('source_platform', filter);
-    const { data } = await query;
-    if (data) {
-      if (user) {
-        const postIds = data.map((p) => p.id);
-        if (postIds.length) {
-          const [lr, br, rr] = await Promise.all([
-            supabase.from('likes').select('post_id').eq('user_id', user.id).in('post_id', postIds),
-            supabase.from('bookmarks').select('post_id').eq('user_id', user.id).in('post_id', postIds),
-            supabase.from('reposts').select('post_id').eq('user_id', user.id).in('post_id', postIds),
-          ]);
-          const liked = new Set((lr.data || []).map((l) => l.post_id));
-          const bookmarked = new Set((br.data || []).map((b) => b.post_id));
-          const reposted = new Set((rr.data || []).map((r) => r.post_id));
-          data.forEach((p) => { p.user_liked = liked.has(p.id); p.user_bookmarked = bookmarked.has(p.id); p.user_reposted = reposted.has(p.id); });
+    try {
+      const supabase = createClient();
+      let query = supabase.from('posts').select('*, profiles(*)').order('created_at', { ascending: false }).range(pageNum * PAGE_SIZE, (pageNum + 1) * PAGE_SIZE - 1);
+      if (filter !== 'all') query = query.eq('source_platform', filter);
+      const { data, error } = await query;
+      if (error) { console.error('Feed fetch error:', error); setLoading(false); setLoadingMore(false); return; }
+      if (data) {
+        if (user) {
+          const postIds = data.map((p) => p.id);
+          if (postIds.length) {
+            const [lr, br, rr] = await Promise.all([
+              supabase.from('likes').select('post_id').eq('user_id', user.id).in('post_id', postIds),
+              supabase.from('bookmarks').select('post_id').eq('user_id', user.id).in('post_id', postIds),
+              supabase.from('reposts').select('post_id').eq('user_id', user.id).in('post_id', postIds),
+            ]);
+            const liked = new Set((lr.data || []).map((l) => l.post_id));
+            const bookmarked = new Set((br.data || []).map((b) => b.post_id));
+            const reposted = new Set((rr.data || []).map((r) => r.post_id));
+            data.forEach((p) => { p.user_liked = liked.has(p.id); p.user_bookmarked = bookmarked.has(p.id); p.user_reposted = reposted.has(p.id); });
+          }
         }
+        append ? setPosts((prev) => [...prev, ...data]) : setPosts(data);
+        setHasMore(data.length === PAGE_SIZE);
       }
-      append ? setPosts((prev) => [...prev, ...data]) : setPosts(data);
-      setHasMore(data.length === PAGE_SIZE);
-    }
+    } catch (err) { console.error('Feed exception:', err); }
     setLoading(false); setLoadingMore(false);
   }, [filter, user]);
 

@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { useStore } from '@/lib/store';
 import Header from '@/components/Header';
 import AuthModal from '@/components/AuthModal';
@@ -7,12 +7,8 @@ import ComposeModal from '@/components/ComposeModal';
 
 export default function AppShell({ children }) {
   const { initAuth, loading, theme, loadTheme, toast } = useStore();
-  const initialized = useRef(false);
 
   useEffect(() => {
-    // Prevent double-init in React strict mode
-    if (initialized.current) return;
-    initialized.current = true;
     initAuth();
     loadTheme();
   }, []);

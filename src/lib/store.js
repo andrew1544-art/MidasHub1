@@ -18,6 +18,13 @@ function friendlyError(msg) {
   return msg;
 }
 
+async function loadProfile(supabase, userId) {
+  try {
+    const { data } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
+    return data;
+  } catch (e) { return null; }
+}
+
 export const useStore = create((set, get) => ({
   user: null,
   profile: null,
@@ -51,29 +58,33 @@ export const useStore = create((set, get) => ({
     if (!supabase) { set({ loading: false }); return; }
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        const { data: profile } = await supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
-        set({ user: session.user, profile, loading: false });
-      } else {
-        set({ loading: false });
-      }
-
-      // Listen for auth changes — use event filtering to prevent lock storms
-      const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+      // Set up listener FIRST — this catches the initial session restore
+      supabase.auth.onAuthStateChange(async (event, session) => {
+        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
           if (session?.user) {
-            const { data: profile } = await supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
-            set({ user: session.user, profile });
+            const profile = await loadProfile(supabase, session.user.id);
+            set({ user: session.user, profile, loading: false });
+          } else {
+            set({ loading: false });
           }
         } else if (event === 'SIGNED_OUT') {
-          set({ user: null, profile: null });
+          set({ user: null, profile: null, loading: false });
         }
       });
 
-      // Store subscription for cleanup
-      if (typeof window !== 'undefined') {
-        window.__midashub_auth_sub = subscription;
+      // Then trigger session check — this will fire INITIAL_SESSION above
+      const { data: { session } } = await supabase.auth.getSession();
+
+      // Fallback in case onAuthStateChange didn't fire yet
+      if (session?.user) {
+        const profile = await loadProfile(supabase, session.user.id);
+        set({ user: session.user, profile, loading: false });
+      } else {
+        // Give the listener a moment, then set loading false
+        setTimeout(() => {
+          const { loading } = get();
+          if (loading) set({ loading: false });
+        }, 1000);
       }
     } catch (err) {
       console.error('Auth init error:', err);
@@ -84,15 +95,12 @@ export const useStore = create((set, get) => ({
   signup: async ({ email, password, username, displayName, avatarEmoji, dateOfBirth }) => {
     const supabase = getSupabase();
     if (!supabase) return { error: { message: 'App is loading...' } };
-
     try {
       const dob = new Date(dateOfBirth);
       const age = Math.floor((Date.now() - dob.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
       if (age < 15) return { error: { message: 'You must be at least 15 years old.' } };
-
       const { data: existing } = await supabase.from('profiles').select('id').eq('username', username.toLowerCase()).maybeSingle();
       if (existing) return { error: { message: 'Username "' + username + '" is taken.' } };
-
       const { data, error } = await supabase.auth.signUp({
         email, password,
         options: {
@@ -100,42 +108,30 @@ export const useStore = create((set, get) => ({
           emailRedirectTo: `${window.location.origin}/auth/callback`,
         },
       });
-
       if (error) return { error: { message: friendlyError(error.message) } };
       if (data?.user?.identities?.length === 0) return { error: { message: 'Email already registered. Check inbox for verification or log in.' } };
       return { data, needsVerification: true };
-    } catch (err) {
-      return { error: { message: 'Connection error. Try again.' } };
-    }
+    } catch (err) { return { error: { message: 'Connection error. Try again.' } }; }
   },
 
   login: async ({ identifier, password }) => {
     const supabase = getSupabase();
     if (!supabase) return { error: { message: 'App is loading...' } };
-
     try {
       let email = identifier.trim();
-      if (!email.includes('@')) {
-        return { error: { message: 'Please use your email address to log in.' } };
-      }
-
+      if (!email.includes('@')) return { error: { message: 'Please use your email address to log in.' } };
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) return { error: { message: friendlyError(error.message) } };
-
-      const { data: profile } = await supabase.from('profiles').select('*').eq('id', data.user.id).maybeSingle();
+      const profile = await loadProfile(supabase, data.user.id);
       set({ user: data.user, profile, showAuth: false });
       get().showToast('Welcome back! ⚡');
       return { data };
-    } catch (err) {
-      return { error: { message: 'Connection error. Try again.' } };
-    }
+    } catch (err) { return { error: { message: 'Connection error. Try again.' } }; }
   },
 
   logout: async () => {
     const supabase = getSupabase();
-    if (supabase) {
-      try { await supabase.auth.signOut(); } catch (e) {}
-    }
+    if (supabase) { try { await supabase.auth.signOut(); } catch (e) {} }
     set({ user: null, profile: null });
   },
 
@@ -147,9 +143,7 @@ export const useStore = create((set, get) => ({
       const { data, error } = await supabase.from('profiles').update({ ...updates, updated_at: new Date().toISOString() }).eq('id', user.id).select().single();
       if (!error && data) set({ profile: data });
       return { data, error };
-    } catch (err) {
-      return { error: { message: 'Failed to save.' } };
-    }
+    } catch (err) { return { error: { message: 'Failed to save.' } }; }
   },
 
   notifications: [],
@@ -161,8 +155,7 @@ export const useStore = create((set, get) => ({
     if (!user || !supabase) return;
     try {
       const { data } = await supabase.from('notifications').select('*, from_user:profiles!notifications_from_user_id_fkey(*)').eq('user_id', user.id).order('created_at', { ascending: false }).limit(50);
-      const unread = (data || []).filter(n => !n.is_read).length;
-      set({ notifications: data || [], unreadCount: unread });
+      set({ notifications: data || [], unreadCount: (data || []).filter(n => !n.is_read).length });
     } catch (e) {}
   },
 
