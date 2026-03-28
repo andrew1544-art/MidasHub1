@@ -7,6 +7,7 @@ import { timeAgo } from '@/lib/constants';
 import { createClient } from '@/lib/supabase-browser';
 import { sendNotification } from '@/lib/notifications';
 import { RankBadge } from '@/components/RankBadge';
+import { playNotificationSound } from '@/lib/sounds';
 
 export default function Header() {
   const pathname = usePathname();
@@ -18,10 +19,20 @@ export default function Header() {
   const [searchResults, setSearchResults] = useState([]);
   const [showSearch, setShowSearch] = useState(false);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+  const [acceptedIds, setAcceptedIds] = useState(new Set()); // Track locally accepted friend requests
   const notifRef = useRef(null);
   const menuRef = useRef(null);
+  const prevUnread = useRef(0);
 
   useEffect(() => { if (user) fetchNotifications(); }, [user]);
+
+  // Play sound when new notifications arrive
+  useEffect(() => {
+    if (unreadCount > prevUnread.current && prevUnread.current >= 0) {
+      playNotificationSound();
+    }
+    prevUnread.current = unreadCount;
+  }, [unreadCount]);
 
   // Realtime notifications
   useEffect(() => {
@@ -176,25 +187,33 @@ export default function Header() {
                               <span className="text-white/60">{message}</span>
                             </p>
                             <div className="text-[10px] text-white/20 mt-0.5">{timeAgo(n.created_at)}</div>
-                            {n.type === 'friend_request' && (
+                            {n.type === 'friend_request' && !acceptedIds.has(n.id) && (
                               <div className="flex gap-1.5 mt-1.5">
                                 <button onClick={async () => {
+                                  setAcceptedIds(prev => new Set([...prev, n.id]));
                                   const supabase = createClient();
                                   try {
                                     await supabase.from('friendships').update({ status: 'accepted' }).or(`and(requester_id.eq.${n.from_user_id},addressee_id.eq.${user.id})`);
                                     sendNotification({ toUserId: n.from_user_id, fromUserId: user.id, type: 'friend_accepted', content: 'accepted your friend request 🤝' });
+                                    useStore.getState().showToast('Friend added ✓');
+                                    // Mark this notification as read
+                                    await supabase.from('notifications').update({ is_read: true }).eq('id', n.id);
                                     fetchNotifications();
-                                    useStore.getState().showToast('Friend request accepted ✓');
-                                  } catch (e) {}
+                                  } catch (e) { setAcceptedIds(prev => { const s = new Set(prev); s.delete(n.id); return s; }); }
                                 }} className="btn-primary py-1.5 px-3 text-[11px]">Accept</button>
                                 <button onClick={async () => {
+                                  setAcceptedIds(prev => new Set([...prev, n.id]));
                                   const supabase = createClient();
                                   try {
                                     await supabase.from('friendships').delete().or(`and(requester_id.eq.${n.from_user_id},addressee_id.eq.${user.id})`);
+                                    await supabase.from('notifications').update({ is_read: true }).eq('id', n.id);
                                     fetchNotifications();
                                   } catch (e) {}
                                 }} className="btn-secondary py-1 px-3 text-[10px]">Decline</button>
                               </div>
+                            )}
+                            {n.type === 'friend_request' && acceptedIds.has(n.id) && (
+                              <div className="text-xs text-green-400 mt-1.5 font-semibold">✓ Accepted</div>
                             )}
                           </div>
                         </div>

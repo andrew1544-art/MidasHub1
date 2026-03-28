@@ -7,6 +7,7 @@ import { StartTradeButton, TradeCard } from '@/components/TradeBox';
 import { useStore } from '@/lib/store';
 import { createClient } from '@/lib/supabase-browser';
 import { timeAgo } from '@/lib/constants';
+import { playMessageSound } from '@/lib/sounds';
 
 function ChatInner() {
   const { user, profile, setShowAuth } = useStore();
@@ -163,7 +164,7 @@ function ChatInner() {
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `conversation_id=eq.${activeConvo}` }, async (p) => {
         try {
           const { data } = await supabase.from('messages').select('*, profiles(*)').eq('id', p.new.id).maybeSingle();
-          if (data) { setMessages(prev => [...prev, data]); setTimeout(() => endRef.current?.scrollIntoView({ behavior: 'smooth' }), 50); }
+          if (data) { setMessages(prev => [...prev, data]); if (data.sender_id !== user.id) playMessageSound(); setTimeout(() => endRef.current?.scrollIntoView({ behavior: 'smooth' }), 50); }
         } catch (e) {}
       }).subscribe();
     return () => { supabase.removeChannel(ch); };
