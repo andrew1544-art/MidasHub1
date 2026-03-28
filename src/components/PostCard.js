@@ -5,8 +5,8 @@ import { useStore } from '@/lib/store';
 import { createClient } from '@/lib/supabase-browser';
 import { PLATFORMS, formatCount, timeAgo } from '@/lib/constants';
 
-export default function PostCard({ post, onUpdate }) {
-  const { user, profile } = useStore();
+export default function PostCard({ post }) {
+  const { user, profile, showToast } = useStore();
   const [liked, setLiked] = useState(post.user_liked || false);
   const [likesCount, setLikesCount] = useState(post.likes_count || 0);
   const [bookmarked, setBookmarked] = useState(post.user_bookmarked || false);
@@ -23,21 +23,13 @@ export default function PostCard({ post, onUpdate }) {
     if (!user) return useStore.getState().setShowAuth(true);
     const supabase = createClient();
     if (liked) {
-      setLiked(false);
-      setLikesCount((c) => c - 1);
+      setLiked(false); setLikesCount((c) => c - 1);
       await supabase.from('likes').delete().match({ user_id: user.id, post_id: post.id });
     } else {
-      setLiked(true);
-      setLikesCount((c) => c + 1);
+      setLiked(true); setLikesCount((c) => c + 1);
       await supabase.from('likes').insert({ user_id: user.id, post_id: post.id });
-      // Notify post owner
       if (post.user_id !== user.id) {
-        await supabase.from('notifications').insert({
-          user_id: post.user_id,
-          from_user_id: user.id,
-          type: 'like',
-          reference_id: post.id,
-        });
+        await supabase.from('notifications').insert({ user_id: post.user_id, from_user_id: user.id, type: 'like', reference_id: post.id });
       }
     }
   };
@@ -48,9 +40,11 @@ export default function PostCard({ post, onUpdate }) {
     if (bookmarked) {
       setBookmarked(false);
       await supabase.from('bookmarks').delete().match({ user_id: user.id, post_id: post.id });
+      showToast('Removed from bookmarks');
     } else {
       setBookmarked(true);
       await supabase.from('bookmarks').insert({ user_id: user.id, post_id: post.id });
+      showToast('Saved to bookmarks ✓');
     }
   };
 
@@ -59,12 +53,7 @@ export default function PostCard({ post, onUpdate }) {
     if (showComments) return;
     setLoadingComments(true);
     const supabase = createClient();
-    const { data } = await supabase
-      .from('comments')
-      .select('*, profiles(*)')
-      .eq('post_id', post.id)
-      .order('created_at', { ascending: true })
-      .limit(50);
+    const { data } = await supabase.from('comments').select('*, profiles(*)').eq('post_id', post.id).order('created_at', { ascending: true }).limit(50);
     setComments(data || []);
     setLoadingComments(false);
   };
@@ -72,30 +61,14 @@ export default function PostCard({ post, onUpdate }) {
   const submitComment = async () => {
     if (!commentText.trim() || !user) return;
     const supabase = createClient();
-    const { data } = await supabase
-      .from('comments')
-      .insert({ user_id: user.id, post_id: post.id, content: commentText.trim() })
-      .select('*, profiles(*)')
-      .single();
+    const { data } = await supabase.from('comments').insert({ user_id: user.id, post_id: post.id, content: commentText.trim() }).select('*, profiles(*)').single();
     if (data) {
       setComments([...comments, data]);
       setCommentText('');
-      // Notify post owner
       if (post.user_id !== user.id) {
-        await supabase.from('notifications').insert({
-          user_id: post.user_id,
-          from_user_id: user.id,
-          type: 'comment',
-          reference_id: post.id,
-        });
+        await supabase.from('notifications').insert({ user_id: post.user_id, from_user_id: user.id, type: 'comment', reference_id: post.id });
       }
     }
-  };
-
-  const handleRepost = async () => {
-    if (!user) return useStore.getState().setShowAuth(true);
-    const supabase = createClient();
-    await supabase.from('reposts').insert({ user_id: user.id, post_id: post.id });
   };
 
   const shareToSocial = (platform) => {
@@ -111,62 +84,53 @@ export default function PostCard({ post, onUpdate }) {
     setShowShareMenu(false);
   };
 
+  const copyLink = () => {
+    navigator.clipboard.writeText(`${window.location.origin}/post/${post.id}`);
+    showToast('Link copied ✓');
+    setShowShareMenu(false);
+  };
+
   return (
     <article className="post-card animate-slide-up">
-      {/* Viral badge */}
       {post.is_viral && (
         <div className="flex items-center gap-1.5 text-[11px] font-bold text-orange-400 mb-3">
-          <span>🔥</span> VIRAL — {formatCount(post.views_count || post.likes_count * 10)} views
+          🔥 VIRAL — {formatCount(post.views_count || post.likes_count * 10)} views
         </div>
       )}
 
-      {/* User info */}
       <div className="flex items-center gap-3 mb-3">
-        <Link href={`/profile/${postUser.username}`} className="text-3xl hover:scale-110 transition-transform">
+        <Link href={`/profile/${postUser.username}`} className="text-3xl hover:scale-110 transition-transform shrink-0">
           {postUser.avatar_emoji || '😎'}
         </Link>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <Link href={`/profile/${postUser.username}`} className="font-bold text-sm hover:underline">
-              {postUser.display_name || 'User'}
-            </Link>
-            <span className="text-xs text-white/30">@{postUser.username}</span>
+            <Link href={`/profile/${postUser.username}`} className="font-bold text-sm hover:underline truncate">{postUser.display_name || 'User'}</Link>
+            <span className="text-xs text-white/25 truncate">@{postUser.username}</span>
           </div>
           <div className="flex items-center gap-2 mt-0.5">
-            <span className="platform-pill text-[10px]" style={{ background: `${plat.color}22`, color: plat.color }}>
-              {plat.icon} via {plat.name}
+            <span className="platform-pill text-[10px] py-0.5" style={{ background: `${plat.color}18`, color: plat.color }}>
+              {plat.icon} {plat.name}
             </span>
-            <span className="text-[11px] text-white/25">{timeAgo(post.created_at)}</span>
+            <span className="text-[11px] text-white/20">{timeAgo(post.created_at)}</span>
           </div>
         </div>
         {post.source_url && (
-          <a href={post.source_url} target="_blank" rel="noopener noreferrer"
-            className="text-xs text-white/30 hover:text-white/60 transition"
-          >
-            🔗 Source
-          </a>
+          <a href={post.source_url} target="_blank" rel="noopener noreferrer" className="text-xs text-white/20 hover:text-white/50 transition shrink-0">🔗</a>
         )}
       </div>
 
-      {/* Content */}
-      <p className="text-[15px] leading-relaxed whitespace-pre-wrap break-words mb-3">
-        {post.content}
-      </p>
+      <p className="text-[15px] leading-relaxed whitespace-pre-wrap break-words">{post.content}</p>
 
-      {/* Tags */}
       {post.tags && post.tags.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 mb-3">
+        <div className="flex flex-wrap gap-1.5 mt-2">
           {post.tags.map((tag) => (
-            <span key={tag} className="text-xs text-yellow-400/80 hover:text-yellow-400 cursor-pointer">
-              #{tag}
-            </span>
+            <span key={tag} className="text-xs text-[var(--accent)] opacity-70">#{tag}</span>
           ))}
         </div>
       )}
 
-      {/* Media */}
       {post.media_urls && post.media_urls.length > 0 && (
-        <div className={`grid gap-2 mb-3 rounded-xl overflow-hidden ${post.media_urls.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}`}>
+        <div className={`grid gap-1.5 mt-3 rounded-xl overflow-hidden ${post.media_urls.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}`}>
           {post.media_urls.map((url, i) => (
             <div key={i} className="aspect-video bg-white/5 rounded-xl overflow-hidden">
               <img src={url} alt="" className="w-full h-full object-cover" loading="lazy" />
@@ -176,94 +140,67 @@ export default function PostCard({ post, onUpdate }) {
       )}
 
       {/* Actions */}
-      <div className="flex items-center gap-1 pt-3 border-t border-white/5">
+      <div className="flex items-center gap-0.5 mt-3 pt-3 border-t border-white/5">
         <button onClick={handleLike}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition hover:bg-white/5 ${liked ? 'text-red-400' : 'text-white/40'}`}
-        >
-          <span>{liked ? '❤️' : '🤍'}</span>
-          <span>{formatCount(likesCount)}</span>
+          className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-sm transition hover:bg-white/5 ${liked ? 'text-red-400' : 'text-white/35'}`}>
+          {liked ? '❤️' : '🤍'} <span className="text-xs">{formatCount(likesCount)}</span>
         </button>
-
         <button onClick={loadComments}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition hover:bg-white/5 ${showComments ? 'text-blue-400' : 'text-white/40'}`}
-        >
-          <span>💬</span>
-          <span>{formatCount(post.comments_count || 0)}</span>
+          className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-sm transition hover:bg-white/5 ${showComments ? 'text-blue-400' : 'text-white/35'}`}>
+          💬 <span className="text-xs">{formatCount(post.comments_count || 0)}</span>
         </button>
-
-        <button onClick={handleRepost}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-white/40 transition hover:bg-white/5 hover:text-green-400"
-        >
-          <span>🔄</span>
-          <span>{formatCount(post.reposts_count || 0)}</span>
+        <button onClick={async () => {
+          if (!user) return useStore.getState().setShowAuth(true);
+          const supabase = createClient();
+          await supabase.from('reposts').insert({ user_id: user.id, post_id: post.id }).catch(() => {});
+          showToast('Reposted ✓');
+        }} className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-sm text-white/35 transition hover:bg-white/5 hover:text-green-400">
+          🔄 <span className="text-xs">{formatCount(post.reposts_count || 0)}</span>
         </button>
-
         <div className="relative ml-auto">
-          <button onClick={() => setShowShareMenu(!showShareMenu)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-white/40 transition hover:bg-white/5"
-          >
-            <span>📤</span> Share
-          </button>
+          <button onClick={() => setShowShareMenu(!showShareMenu)} className="px-2.5 py-1.5 rounded-lg text-sm text-white/35 transition hover:bg-white/5">📤</button>
           {showShareMenu && (
-            <div className="absolute bottom-full right-0 mb-2 glass rounded-xl p-2 w-48 shadow-2xl animate-slide-up z-10">
-              <div className="text-xs text-white/30 px-2 py-1 mb-1">Share to...</div>
+            <div className="absolute bottom-full right-0 mb-1 glass rounded-xl p-1.5 w-44 shadow-2xl animate-slide-up z-10">
               {['twitter', 'facebook', 'whatsapp', 'linkedin'].map((p) => (
-                <button key={p} onClick={() => shareToSocial(p)}
-                  className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-white/5 text-sm transition text-left"
-                >
-                  <span>{PLATFORMS[p].icon}</span> {PLATFORMS[p].name}
+                <button key={p} onClick={() => shareToSocial(p)} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-white/5 text-sm transition text-left">
+                  {PLATFORMS[p].icon} {PLATFORMS[p].name}
                 </button>
               ))}
-              <button onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/post/${post.id}`); setShowShareMenu(false); }}
-                className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-white/5 text-sm transition text-left"
-              >
-                📋 Copy Link
-              </button>
+              <button onClick={copyLink} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-white/5 text-sm transition text-left">📋 Copy Link</button>
             </div>
           )}
         </div>
-
-        <button onClick={handleBookmark}
-          className={`px-2 py-1.5 rounded-lg text-sm transition hover:bg-white/5 ${bookmarked ? 'text-yellow-400' : 'text-white/40'}`}
-        >
+        <button onClick={handleBookmark} className={`px-2 py-1.5 rounded-lg text-sm transition hover:bg-white/5 ${bookmarked ? 'text-[var(--accent)]' : 'text-white/35'}`}>
           {bookmarked ? '🔖' : '📑'}
         </button>
       </div>
 
-      {/* Comments section */}
+      {/* Comments */}
       {showComments && (
-        <div className="mt-4 pt-4 border-t border-white/5 space-y-3 animate-fade-in">
+        <div className="mt-3 pt-3 border-t border-white/5 space-y-2.5 animate-fade-in">
           {loadingComments ? (
-            <div className="text-center text-white/30 text-sm py-4">Loading comments...</div>
+            <div className="text-center text-white/20 text-sm py-3">Loading...</div>
           ) : comments.length === 0 ? (
-            <div className="text-center text-white/20 text-sm py-2">No comments yet — be the first!</div>
+            <div className="text-center text-white/15 text-sm py-2">No comments yet</div>
           ) : comments.map((c) => (
-            <div key={c.id} className="flex gap-2.5">
-              <Link href={`/profile/${c.profiles?.username}`} className="text-xl shrink-0">{c.profiles?.avatar_emoji || '😎'}</Link>
+            <div key={c.id} className="flex gap-2">
+              <Link href={`/profile/${c.profiles?.username}`} className="text-lg shrink-0">{c.profiles?.avatar_emoji || '😎'}</Link>
               <div className="flex-1 bg-white/3 rounded-xl px-3 py-2">
                 <div className="flex items-center gap-2">
                   <Link href={`/profile/${c.profiles?.username}`} className="font-semibold text-xs hover:underline">{c.profiles?.display_name}</Link>
-                  <span className="text-[10px] text-white/25">{timeAgo(c.created_at)}</span>
+                  <span className="text-[10px] text-white/20">{timeAgo(c.created_at)}</span>
                 </div>
-                <p className="text-sm mt-1 text-white/80">{c.content}</p>
+                <p className="text-sm mt-0.5 text-white/70">{c.content}</p>
               </div>
             </div>
           ))}
-
-          {/* Comment input */}
           {user && (
             <div className="flex gap-2 mt-2">
-              <span className="text-xl shrink-0">{profile?.avatar_emoji || '😎'}</span>
-              <input
-                value={commentText}
-                onChange={(e) => setCommentText(e.target.value)}
+              <span className="text-lg shrink-0">{profile?.avatar_emoji || '😎'}</span>
+              <input value={commentText} onChange={(e) => setCommentText(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && submitComment()}
-                placeholder="Write a comment..."
-                className="input-field flex-1 py-2 text-sm"
-              />
-              <button onClick={submitComment} className="btn-primary py-2 px-4 text-xs">
-                Send
-              </button>
+                placeholder="Write a comment..." className="input-field flex-1 py-2 text-sm" />
+              <button onClick={submitComment} disabled={!commentText.trim()} className="btn-primary py-2 px-3 text-xs disabled:opacity-30">Send</button>
             </div>
           )}
         </div>

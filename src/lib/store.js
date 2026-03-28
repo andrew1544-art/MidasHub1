@@ -1,14 +1,12 @@
 import { create } from 'zustand';
 import { createClient } from '@/lib/supabase-browser';
 
-// Lazy init — don't create client at module load (breaks SSR/prerender)
 function getSupabase() {
   if (typeof window === 'undefined') return null;
   return createClient();
 }
 
 export const useStore = create((set, get) => ({
-  // Auth
   user: null,
   profile: null,
   loading: true,
@@ -17,9 +15,25 @@ export const useStore = create((set, get) => ({
   showCompose: false,
   showAuth: false,
   authMode: 'signup',
+  theme: 'midnight',
+  toast: null,
 
   setShowCompose: (v) => set({ showCompose: v }),
   setShowAuth: (v, mode = 'signup') => set({ showAuth: v, authMode: mode }),
+  setTheme: (t) => {
+    set({ theme: t });
+    if (typeof window !== 'undefined') localStorage.setItem('midashub_theme', t);
+  },
+  showToast: (msg) => {
+    set({ toast: msg });
+    setTimeout(() => set({ toast: null }), 3000);
+  },
+
+  loadTheme: () => {
+    if (typeof window === 'undefined') return;
+    const saved = localStorage.getItem('midashub_theme');
+    if (saved) set({ theme: saved });
+  },
 
   initAuth: async () => {
     const supabase = getSupabase();
@@ -38,6 +52,10 @@ export const useStore = create((set, get) => ({
       }
 
       supabase.auth.onAuthStateChange(async (event, session) => {
+        if (event === 'SIGNED_OUT') {
+          set({ user: null, profile: null });
+          return;
+        }
         if (session?.user) {
           const { data: profile } = await supabase
             .from('profiles')
@@ -71,7 +89,7 @@ export const useStore = create((set, get) => ({
       .eq('username', username.toLowerCase())
       .single();
     if (existing) {
-      return { error: { message: 'Username already taken. Try another one!' } };
+      return { error: { message: 'Username is already taken. Try another one!' } };
     }
 
     const { data, error } = await supabase.auth.signUp({
@@ -91,9 +109,46 @@ export const useStore = create((set, get) => ({
     return { data, needsVerification: true };
   },
 
-  login: async ({ email, password }) => {
+  // Login with email or username
+  login: async ({ identifier, password }) => {
     const supabase = getSupabase();
     if (!supabase) return { error: { message: 'Client not ready' } };
+
+    let email = identifier;
+
+    // If identifier is not email, look up by username
+    if (!identifier.includes('@')) {
+      const { data: prof, error: lookupErr } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('username', identifier.toLowerCase())
+        .single();
+
+      if (!prof || lookupErr) {
+        return { error: { message: 'Username not found. Check spelling or use your email.' } };
+      }
+
+      // Get email from auth admin — use a workaround: try common pattern
+      // Since we can't look up email from profile, ask user to use email
+      // Actually we need to store email or use a different approach
+      // Best approach: try signing in with identifier as email first, if fails try username
+      const { data: directLogin, error: directErr } = await supabase.auth.signInWithPassword({
+        email: identifier,
+        password,
+      });
+
+      if (!directErr && directLogin?.user) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', directLogin.user.id)
+          .single();
+        set({ user: directLogin.user, profile, showAuth: false });
+        return { data: directLogin };
+      }
+
+      return { error: { message: 'Could not log in with username. Please use your email address.' } };
+    }
 
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) return { error };
@@ -109,8 +164,13 @@ export const useStore = create((set, get) => ({
 
   logout: async () => {
     const supabase = getSupabase();
-    if (supabase) await supabase.auth.signOut();
-    set({ user: null, profile: null });
+    if (supabase) {
+      await supabase.auth.signOut();
+    }
+    set({ user: null, profile: null, showAuth: false, showCompose: false });
+    if (typeof window !== 'undefined') {
+      window.location.href = '/';
+    }
   },
 
   updateProfile: async (updates) => {

@@ -12,80 +12,33 @@ export default function BookmarksPage() {
 
   useEffect(() => {
     if (!user) { setLoading(false); return; }
-    const fetchBookmarks = async () => {
+    (async () => {
       const supabase = createClient();
-      const { data: bookmarks } = await supabase
-        .from('bookmarks')
-        .select('post_id')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
-
-      if (!bookmarks || bookmarks.length === 0) {
-        setPosts([]);
-        setLoading(false);
-        return;
-      }
-
-      const postIds = bookmarks.map((b) => b.post_id);
-      const { data: postsData } = await supabase
-        .from('posts')
-        .select('*, profiles(*)')
-        .in('id', postIds);
-
-      // Add like/bookmark status
-      const [likesRes] = await Promise.all([
-        supabase.from('likes').select('post_id').eq('user_id', user.id).in('post_id', postIds),
-      ]);
-      const likedIds = new Set((likesRes.data || []).map((l) => l.post_id));
-
-      (postsData || []).forEach((p) => {
-        p.user_liked = likedIds.has(p.id);
-        p.user_bookmarked = true;
-      });
-
-      // Sort in bookmark order
-      const postMap = new Map((postsData || []).map((p) => [p.id, p]));
-      const sorted = postIds.map((id) => postMap.get(id)).filter(Boolean);
-      setPosts(sorted);
+      const { data: bookmarks } = await supabase.from('bookmarks').select('post_id').eq('user_id', user.id).order('created_at', { ascending: false });
+      if (!bookmarks?.length) { setPosts([]); setLoading(false); return; }
+      const ids = bookmarks.map((b) => b.post_id);
+      const { data } = await supabase.from('posts').select('*, profiles(*)').in('id', ids);
+      const [lr] = await Promise.all([supabase.from('likes').select('post_id').eq('user_id', user.id).in('post_id', ids)]);
+      const liked = new Set((lr.data || []).map((l) => l.post_id));
+      (data || []).forEach((p) => { p.user_liked = liked.has(p.id); p.user_bookmarked = true; });
+      const postMap = new Map((data || []).map((p) => [p.id, p]));
+      setPosts(ids.map((id) => postMap.get(id)).filter(Boolean));
       setLoading(false);
-    };
-    fetchBookmarks();
+    })();
   }, [user]);
 
-  if (!user) {
-    return (
-      <AppShell>
-        <div className="max-w-2xl mx-auto px-4 py-20 text-center">
-          <div className="text-6xl mb-4">🔖</div>
-          <h2 className="text-2xl font-bold mb-3">Log in to see bookmarks</h2>
-          <button onClick={() => setShowAuth(true)} className="btn-primary mt-4">Log In</button>
-        </div>
-      </AppShell>
-    );
-  }
+  if (!user) return (
+    <AppShell><div className="max-w-2xl mx-auto px-4 py-16 text-center"><div className="text-5xl mb-3">🔖</div><h2 className="text-xl font-bold mb-2">Log in to see bookmarks</h2><button onClick={() => setShowAuth(true)} className="btn-primary mt-3">Log In</button></div></AppShell>
+  );
 
   return (
     <AppShell>
-      <div className="max-w-2xl mx-auto px-4 py-6">
-        <h1 className="text-3xl font-black mb-2">🔖 Bookmarks</h1>
-        <p className="text-white/40 text-sm mb-6">Posts you&apos;ve saved for later</p>
-
-        {loading ? (
-          <div className="space-y-4">
-            {[1, 2].map((i) => (
-              <div key={i} className="post-card"><div className="h-20 skeleton rounded" /></div>
-            ))}
-          </div>
-        ) : posts.length === 0 ? (
-          <div className="text-center py-16 text-white/30">
-            <div className="text-4xl mb-3">📑</div>
-            No bookmarks yet. Tap the bookmark icon on any post to save it here.
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {posts.map((post) => <PostCard key={post.id} post={post} />)}
-          </div>
-        )}
+      <div className="max-w-2xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
+        <h1 className="text-2xl sm:text-3xl font-black mb-1">🔖 Bookmarks</h1>
+        <p className="text-white/30 text-sm mb-4 sm:mb-5">Posts you saved for later</p>
+        {loading ? <div className="space-y-3">{[1,2].map((i) => <div key={i} className="post-card"><div className="h-16 skeleton" /></div>)}</div> :
+        posts.length === 0 ? <div className="text-center py-14 text-white/20"><div className="text-4xl mb-2">📑</div>No bookmarks yet. Tap the bookmark icon on any post.</div> :
+        <div className="space-y-3">{posts.map((post) => <PostCard key={post.id} post={post} />)}</div>}
       </div>
     </AppShell>
   );

@@ -6,18 +6,24 @@ import AuthModal from '@/components/AuthModal';
 import ComposeModal from '@/components/ComposeModal';
 
 export default function AppShell({ children }) {
-  const { initAuth, loading } = useStore();
+  const { initAuth, loading, theme, loadTheme, toast } = useStore();
 
   useEffect(() => {
     initAuth();
+    loadTheme();
   }, []);
+
+  // Apply theme to html
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+  }, [theme]);
 
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <div className="text-6xl mb-4 animate-pulse">⚡</div>
-          <div className="text-xl font-bold gold-gradient">Loading MidasHub...</div>
+          <div className="text-xl font-bold accent-text">Loading MidasHub...</div>
         </div>
       </div>
     );
@@ -29,6 +35,7 @@ export default function AppShell({ children }) {
       <main className="pb-20 md:pb-8">{children}</main>
       <AuthModal />
       <ComposeModal />
+      {toast && <div className="toast">{toast}</div>}
     </>
   );
 }
