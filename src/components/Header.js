@@ -21,6 +21,7 @@ export default function Header() {
 
   useEffect(() => { if (user) fetchNotifications(); }, [user]);
 
+  // Realtime notifications
   useEffect(() => {
     if (!user) return;
     const supabase = createClient();
@@ -29,7 +30,11 @@ export default function Header() {
         try { fetchNotifications(); } catch (e) {}
       })
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+
+    // Also poll every 30s in case realtime disconnects
+    const poll = setInterval(() => { try { fetchNotifications(); } catch (e) {} }, 30000);
+
+    return () => { supabase.removeChannel(channel); clearInterval(poll); };
   }, [user]);
 
   useEffect(() => {

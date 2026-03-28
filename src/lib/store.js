@@ -25,6 +25,9 @@ async function loadProfile(supabase, userId) {
   } catch (e) { return null; }
 }
 
+// Track if auth listener is already set up — prevents duplicates across navigations
+let authInitialized = false;
+
 export const useStore = create((set, get) => ({
   user: null,
   profile: null,
@@ -54,11 +57,21 @@ export const useStore = create((set, get) => ({
   },
 
   initAuth: async () => {
+    // Only set up auth listener ONCE across all mounts
+    if (authInitialized) {
+      // Already initialized — just make sure loading is false
+      const { user } = get();
+      if (get().loading && user) set({ loading: false });
+      if (get().loading) set({ loading: false });
+      return;
+    }
+    authInitialized = true;
+
     const supabase = getSupabase();
     if (!supabase) { set({ loading: false }); return; }
 
     try {
-      // Set up listener FIRST — this catches the initial session restore
+      // Set up listener FIRST
       supabase.auth.onAuthStateChange(async (event, session) => {
         if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
           if (session?.user) {
@@ -72,19 +85,13 @@ export const useStore = create((set, get) => ({
         }
       });
 
-      // Then trigger session check — this will fire INITIAL_SESSION above
+      // Then trigger session check
       const { data: { session } } = await supabase.auth.getSession();
-
-      // Fallback in case onAuthStateChange didn't fire yet
       if (session?.user) {
         const profile = await loadProfile(supabase, session.user.id);
         set({ user: session.user, profile, loading: false });
       } else {
-        // Give the listener a moment, then set loading false
-        setTimeout(() => {
-          const { loading } = get();
-          if (loading) set({ loading: false });
-        }, 1000);
+        setTimeout(() => { if (get().loading) set({ loading: false }); }, 1500);
       }
     } catch (err) {
       console.error('Auth init error:', err);

@@ -1,5 +1,5 @@
 'use client';
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useStore } from '@/lib/store';
 import { createClient } from '@/lib/supabase-browser';
 import { PLATFORMS, PLATFORM_LIST } from '@/lib/constants';
@@ -15,7 +15,18 @@ export default function ComposeModal() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showCrossPost, setShowCrossPost] = useState(false);
+  const [quote, setQuote] = useState(null);
   const fileRef = useRef(null);
+
+  // Pick up quote repost from PostCard
+  useEffect(() => {
+    if (showCompose && typeof window !== 'undefined' && window.__midashub_quote) {
+      setQuote(window.__midashub_quote);
+      window.__midashub_quote = null;
+    } else if (!showCompose) {
+      setQuote(null);
+    }
+  }, [showCompose]);
 
   if (!showCompose || !user) return null;
 
@@ -27,63 +38,35 @@ export default function ComposeModal() {
 
   const handlePost = async () => {
     if (!content.trim() || loading) return;
-    setLoading(true);
-    setError('');
-
+    setLoading(true); setError('');
     try {
       const supabase = createClient();
       let mediaUrls = [];
-
-      // Upload media (skip if none)
       for (const file of mediaFiles) {
         try {
           const ext = file.name.split('.').pop();
           const path = `${user.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-          const { data, error: uploadErr } = await supabase.storage.from('media').upload(path, file);
-          if (data && !uploadErr) {
-            const { data: urlData } = supabase.storage.from('media').getPublicUrl(data.path);
-            mediaUrls.push(urlData.publicUrl);
-          }
-        } catch (uploadErr) {
-          console.warn('Media upload failed:', uploadErr);
-          // Continue without media — don't block the post
-        }
+          const { data, error: ue } = await supabase.storage.from('media').upload(path, file);
+          if (data && !ue) { const { data: u } = supabase.storage.from('media').getPublicUrl(data.path); mediaUrls.push(u.publicUrl); }
+        } catch (e) {}
       }
-
       const parsedTags = tags.split(',').map(t => t.trim().replace('#', '').toLowerCase()).filter(Boolean);
-
-      const { error: postErr } = await supabase.from('posts').insert({
-        user_id: user.id,
-        content: content.trim(),
-        source_platform: sourcePlatform,
-        source_url: sourceUrl.trim() || null,
-        media_urls: mediaUrls,
-        media_type: mediaUrls.length > 0 ? 'image' : null,
-        tags: parsedTags,
-      });
-
-      if (postErr) {
-        console.error('Post error:', postErr);
-        setError('Failed to post: ' + (postErr.message || 'Unknown error'));
-        setLoading(false);
-        return;
+      // If quoting, append the quote to content
+      let finalContent = content.trim();
+      if (quote) {
+        finalContent += `\n\n💬 Reposting @${quote.username}:\n"${quote.content.slice(0, 200)}${quote.content.length > 200 ? '...' : ''}"`;
       }
-
-      // Success — reset and close
-      setContent('');
-      setSourcePlatform('midashub');
-      setSourceUrl('');
-      setTags('');
-      setMediaFiles([]);
-      setMediaPreviews([]);
-      setShowCompose(false);
+      const { error: postErr } = await supabase.from('posts').insert({
+        user_id: user.id, content: finalContent, source_platform: sourcePlatform,
+        source_url: sourceUrl.trim() || null, media_urls: mediaUrls,
+        media_type: mediaUrls.length > 0 ? 'image' : null, tags: parsedTags,
+      });
+      if (postErr) { setError('Failed to post: ' + (postErr.message || 'Unknown error')); setLoading(false); return; }
+      setContent(''); setSourcePlatform('midashub'); setSourceUrl(''); setTags('');
+      setMediaFiles([]); setMediaPreviews([]); setQuote(null); setShowCompose(false);
       showToast('Posted! ⚡');
       window.dispatchEvent(new Event('midashub:newpost'));
-    } catch (err) {
-      console.error('Post exception:', err);
-      setError('Something went wrong. Check your connection and try again.');
-    }
-
+    } catch (err) { setError('Something went wrong. Try again.'); }
     setLoading(false);
   };
 
@@ -92,7 +75,7 @@ export default function ComposeModal() {
       onClick={(e) => e.target === e.currentTarget && !loading && setShowCompose(false)}>
       <div className="w-full max-w-lg glass rounded-2xl sm:rounded-3xl p-5 sm:p-6 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-bold">Create Post ⚡</h3>
+          <h3 className="text-lg font-bold">{quote ? '💬 Repost with Comment' : 'Create Post ⚡'}</h3>
           <button onClick={() => !loading && setShowCompose(false)} className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-white/40 hover:text-white text-sm transition">✕</button>
         </div>
 
@@ -104,8 +87,20 @@ export default function ComposeModal() {
           </div>
         </div>
 
+        {/* Quote preview */}
+        {quote && (
+          <div className="mb-3 p-3 rounded-xl border border-white/10 bg-white/3">
+            <div className="flex items-center gap-1.5 mb-1">
+              <span className="text-[10px] text-white/30">Quoting</span>
+              <span className="text-xs font-semibold text-white/50">@{quote.username}</span>
+              <button onClick={() => setQuote(null)} className="ml-auto text-white/20 text-xs hover:text-white/50">✕ Remove</button>
+            </div>
+            <p className="text-xs text-white/40 line-clamp-3 italic">"{quote.content.slice(0, 150)}{quote.content.length > 150 ? '...' : ''}"</p>
+          </div>
+        )}
+
         <textarea value={content} onChange={(e) => setContent(e.target.value)} autoFocus
-          placeholder="What's on your mind? Share anything..."
+          placeholder={quote ? "Add your thoughts about this post..." : "What's on your mind? Share anything..."}
           className="w-full h-28 p-3 rounded-xl bg-white/5 border border-white/8 text-white text-sm resize-none outline-none focus:border-[var(--accent)] leading-relaxed placeholder:text-white/25" />
         <div className="text-[11px] text-white/15 text-right mt-1">{content.length} chars</div>
 
@@ -127,8 +122,7 @@ export default function ComposeModal() {
             <button onClick={() => setSourcePlatform('midashub')}
               className={`platform-pill ${sourcePlatform === 'midashub' ? 'accent-gradient text-black' : 'bg-white/5 text-white/40'}`}>⚡ My Original Post</button>
             {PLATFORM_LIST.map(([key, p]) => (
-              <button key={key} onClick={() => setSourcePlatform(key)}
-                className="platform-pill"
+              <button key={key} onClick={() => setSourcePlatform(key)} className="platform-pill"
                 style={sourcePlatform === key ? { background: `${p.color}25`, color: p.color, border: `1px solid ${p.color}50` } : { background: 'rgba(255,255,255,0.04)', color: 'rgba(255,255,255,0.35)' }}>
                 {p.icon} {p.name}
               </button>
@@ -139,13 +133,12 @@ export default function ComposeModal() {
         {sourcePlatform !== 'midashub' && (
           <input value={sourceUrl} onChange={(e) => setSourceUrl(e.target.value)} placeholder="Paste original post URL (optional)" className="input-field mb-3 text-sm py-2" />
         )}
-
         <input value={tags} onChange={(e) => setTags(e.target.value)} placeholder="Add tags (comma separated): funny, viral, trending" className="input-field mb-3 text-sm py-2" />
 
         <div className="flex items-center gap-2 mb-4">
           <input type="file" ref={fileRef} multiple accept="image/*,video/*" className="hidden" onChange={handleMedia} />
-          <button onClick={() => fileRef.current?.click()} className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 transition text-sm text-white/50" title="Add photos or videos">🖼️ <span className="hidden sm:inline">Add Media</span></button>
-          <button onClick={() => setShowCrossPost(!showCrossPost)} className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 transition text-sm text-white/50" title="Post to other platforms too">🌐 <span className="hidden sm:inline">Cross-Post</span></button>
+          <button onClick={() => fileRef.current?.click()} className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 transition text-sm text-white/50">🖼️ <span className="hidden sm:inline">Add Media</span></button>
+          <button onClick={() => setShowCrossPost(!showCrossPost)} className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 transition text-sm text-white/50">🌐 <span className="hidden sm:inline">Cross-Post</span></button>
         </div>
 
         {showCrossPost && (
@@ -166,11 +159,7 @@ export default function ComposeModal() {
         {error && <div className="mb-3 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm">{error}</div>}
 
         <button onClick={handlePost} disabled={!content.trim() || loading} className="btn-primary w-full py-3 flex items-center justify-center gap-2 disabled:opacity-40">
-          {loading ? (
-            <><span className="animate-spin">⏳</span> Posting...</>
-          ) : (
-            'Post to MidasHub 🚀'
-          )}
+          {loading ? <><span className="animate-spin">⏳</span> Posting...</> : quote ? '💬 Post with Quote' : 'Post to MidasHub 🚀'}
         </button>
       </div>
     </div>

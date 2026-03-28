@@ -77,8 +77,10 @@ function ChatInner() {
     if (!activeConvo) return;
     const ch = supabase.channel(`chat-${activeConvo}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `conversation_id=eq.${activeConvo}` }, async (p) => {
-        const { data } = await supabase.from('messages').select('*, profiles(*)').eq('id', p.new.id).single();
-        if (data) { setMessages(prev => [...prev, data]); setTimeout(() => endRef.current?.scrollIntoView({ behavior: 'smooth' }), 50); }
+        try {
+          const { data } = await supabase.from('messages').select('*, profiles(*)').eq('id', p.new.id).maybeSingle();
+          if (data) { setMessages(prev => [...prev, data]); setTimeout(() => endRef.current?.scrollIntoView({ behavior: 'smooth' }), 50); }
+        } catch (e) {}
       }).subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [activeConvo]);

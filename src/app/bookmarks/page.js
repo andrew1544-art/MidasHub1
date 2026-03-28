@@ -45,7 +45,7 @@ export default function BookmarksPage() {
             <p className="text-white/30 text-sm">Tap the bookmark icon on any post to save it here</p>
           </div>
         ) : (
-          <div className="space-y-3">{posts.map(p => <PostCard key={p.id} post={p}/>)}</div>
+          <div className="space-y-3">{posts.map(p => <PostCard key={p.id} post={p} onPostUpdated={() => window.location.reload()}/>)}</div>
         )}
       </div>
     </AppShell>
