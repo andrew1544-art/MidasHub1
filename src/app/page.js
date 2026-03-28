@@ -1,88 +1,405 @@
 'use client';
-import { Suspense, useEffect } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import AppShell from '@/components/AppShell';
 import { useStore } from '@/lib/store';
 import { PLATFORM_LIST } from '@/lib/constants';
 
+const FEED_PREVIEW = [
+  { avatar: '🧑🏾', name: 'Alex K.', platform: 'snapchat', platformColor: '#FFFC00', platformIcon: '👻', content: 'Wild night out with the crew 🔥 no cap this was legendary', time: '2m', likes: '1.2K', viral: true },
+  { avatar: '👩🏽', name: 'Priya S.', platform: 'instagram', platformColor: '#E4405F', platformIcon: '📸', content: 'Golden hour hits different when you\'re at peace ✨ New chapter loading...', time: '15m', likes: '3.4K', viral: true },
+  { avatar: '👨🏼', name: 'Jake M.', platform: 'twitter', platformColor: '#1DA1F2', platformIcon: '𝕏', content: 'Hot take: pineapple on pizza is elite and I\'m tired of pretending 🍍🍕', time: '32m', likes: '12K', viral: true },
+  { avatar: '👩🏿', name: 'Aisha B.', platform: 'tiktok', platformColor: '#010101', platformIcon: '🎵', content: 'This dance trend is taking over 💃 Wait for the ending 😂', time: '1h', likes: '45K', viral: true },
+  { avatar: '👨🏻', name: 'Marco R.', platform: 'facebook', platformColor: '#1877F2', platformIcon: '📘', content: 'Just got promoted!! 🎉 Hard work pays off. Thank you everyone 🙏', time: '2h', likes: '890' },
+  { avatar: '👩🏻', name: 'Yuki T.', platform: 'youtube', platformColor: '#FF0000', platformIcon: '▶️', content: 'NEW VIDEO: I tried living without social media for 30 days...', time: '3h', likes: '8.9K', viral: true },
+];
+
+const STATS = [
+  { value: '∞', label: 'Post Limit' },
+  { value: '8+', label: 'Platforms' },
+  { value: '15+', label: 'Min Age' },
+  { value: '$0', label: 'Forever' },
+];
+
 function HomeInner() {
   const { user, setShowAuth } = useStore();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const [visibleCards, setVisibleCards] = useState(0);
 
-  useEffect(() => { if (user) router.push('/feed'); }, [user]);
-  useEffect(() => { if (searchParams.get('verified') === 'true') setShowAuth(true, 'login'); }, [searchParams]);
+  useEffect(() => { if (user) router.push('/feed'); }, [user, router]);
+  useEffect(() => { if (searchParams.get('verified') === 'true') setShowAuth(true, 'login'); }, [searchParams, setShowAuth]);
 
-  const features = [
-    { icon: '🌍', title: 'All Platforms, One Feed', desc: 'Repost from Snapchat, Facebook, Instagram, TikTok, X, WhatsApp, YouTube, LinkedIn — visible to everyone.' },
-    { icon: '🔥', title: 'Go Viral', desc: 'No algorithms hiding your content. Posts with 100+ likes auto-trend. Pure organic reach.' },
-    { icon: '💬', title: 'Chat & Connect', desc: 'Make friends, real-time messaging, build your network. No gatekeeping.' },
-    { icon: '🚀', title: 'Cross-Post Anywhere', desc: 'Buttons to jump to any platform and post. Share MidasHub content everywhere.' },
-    { icon: '🛡️', title: 'Verified Accounts', desc: 'Email verification keeps it real. No bots, no fakes.' },
-    { icon: '♾️', title: 'No Limits', desc: 'Post as much as you want. No character caps. No restrictions. Your world.' },
-  ];
+  // Stagger feed preview cards
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setVisibleCards(prev => prev < FEED_PREVIEW.length ? prev + 1 : prev);
+    }, 200);
+    return () => clearInterval(timer);
+  }, []);
 
   return (
     <AppShell>
-      <div className="max-w-5xl mx-auto px-4">
-        <section className="py-16 sm:py-24 md:py-32 text-center">
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/8 text-[var(--accent)] text-sm font-medium mb-6 sm:mb-8">
-            ⚡ The social hub that changes everything
-          </div>
-          <h1 className="text-4xl sm:text-5xl md:text-7xl font-black leading-tight mb-5">
-            Every Post.<br />
-            <span className="accent-text">Every Platform.</span><br />
-            One Feed.
-          </h1>
-          <p className="text-base sm:text-lg text-white/40 max-w-xl mx-auto leading-relaxed mb-8 sm:mb-10 px-4">
-            See what everyone is posting on Snap, Facebook, IG, TikTok, X, YouTube — all in one place. No friend requests needed. No limits.
-          </p>
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mb-10">
-            <button onClick={() => setShowAuth(true, 'signup')} className="btn-primary text-base px-8 py-3.5 rounded-2xl w-full sm:w-auto">
-              Join MidasHub — Free ⚡
-            </button>
-            <button onClick={() => router.push('/feed')} className="btn-secondary text-base px-8 py-3.5 rounded-2xl w-full sm:w-auto">
-              Browse Feed →
-            </button>
-          </div>
-          <div className="flex items-center justify-center gap-2 flex-wrap px-4">
-            {PLATFORM_LIST.map(([key, p]) => (
-              <span key={key} className="platform-pill px-3 py-1.5 text-[11px]" style={{ background: `${p.color}12`, border: `1px solid ${p.color}20`, color: p.color }}>
-                {p.icon} {p.name}
-              </span>
-            ))}
-          </div>
-        </section>
+      <div className="relative">
 
-        <section className="py-12 sm:py-16">
-          <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-4">
-            {features.map((f, i) => (
-              <div key={i} className="glass-light rounded-2xl p-5 hover-lift">
-                <div className="text-2xl mb-2">{f.icon}</div>
-                <h3 className="font-bold text-base mb-1.5">{f.title}</h3>
-                <p className="text-sm text-white/35 leading-relaxed">{f.desc}</p>
+        {/* ===== HERO ===== */}
+        <section className="relative min-h-[92vh] flex items-center overflow-hidden">
+          {/* Animated orbs */}
+          <div className="absolute inset-0 pointer-events-none overflow-hidden">
+            <div className="absolute w-[500px] h-[500px] rounded-full top-[-10%] left-[-5%] opacity-30"
+              style={{ background: 'radial-gradient(circle, rgba(255,215,0,0.15) 0%, transparent 70%)', animation: 'heroFloat 12s ease-in-out infinite' }} />
+            <div className="absolute w-[400px] h-[400px] rounded-full bottom-[5%] right-[-5%] opacity-25"
+              style={{ background: 'radial-gradient(circle, rgba(255,165,0,0.12) 0%, transparent 70%)', animation: 'heroFloat 15s ease-in-out infinite reverse' }} />
+            <div className="absolute w-[300px] h-[300px] rounded-full top-[40%] left-[50%] opacity-20"
+              style={{ background: 'radial-gradient(circle, rgba(99,102,241,0.1) 0%, transparent 70%)', animation: 'heroFloat 10s ease-in-out infinite 2s' }} />
+            {/* Grid lines */}
+            <div className="absolute inset-0 opacity-[0.02]"
+              style={{ backgroundImage: 'linear-gradient(rgba(255,215,0,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(255,215,0,0.3) 1px, transparent 1px)', backgroundSize: '60px 60px' }} />
+          </div>
+
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 w-full">
+            <div className="grid lg:grid-cols-2 gap-12 lg:gap-8 items-center">
+
+              {/* Left — Copy */}
+              <div className="relative z-10 text-center lg:text-left pt-8 lg:pt-0">
+                {/* Badge */}
+                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full mb-6 text-sm font-semibold"
+                  style={{ background: 'rgba(255,215,0,0.08)', border: '1px solid rgba(255,215,0,0.15)', color: '#FFD700', animation: 'slideUp 0.6s ease-out' }}>
+                  <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+                  Live now — Join thousands of people
+                </div>
+
+                <h1 className="text-[clamp(2.5rem,6vw,4.5rem)] font-black leading-[1.05] mb-6"
+                  style={{ animation: 'slideUp 0.7s ease-out 0.1s both' }}>
+                  All Your{' '}
+                  <span className="relative inline-block">
+                    <span className="accent-text">Socials</span>
+                    <svg className="absolute -bottom-1 left-0 w-full" viewBox="0 0 200 8" fill="none" style={{ animation: 'drawLine 1s ease-out 1s both' }}>
+                      <path d="M2 5.5C50 2 150 2 198 5.5" stroke="url(#gold)" strokeWidth="3" strokeLinecap="round" />
+                      <defs><linearGradient id="gold" x1="0" y1="0" x2="200" y2="0"><stop stopColor="#FFD700"/><stop offset="1" stopColor="#FFA500"/></linearGradient></defs>
+                    </svg>
+                  </span>
+                  <br />
+                  One{' '}
+                  <span className="relative inline-block">
+                    <span className="accent-text">Hub</span>
+                    <span className="absolute -top-2 -right-4 text-lg" style={{ animation: 'sparkle 2s ease-in-out infinite' }}>⚡</span>
+                  </span>
+                </h1>
+
+                <p className="text-base sm:text-lg text-white/45 max-w-lg leading-relaxed mb-8 mx-auto lg:mx-0"
+                  style={{ animation: 'slideUp 0.7s ease-out 0.2s both' }}>
+                  Stop switching apps. See everything your friends post on Snapchat, Instagram, TikTok, X, Facebook, YouTube — all in one beautiful feed. No friend requests needed.
+                </p>
+
+                {/* CTA Buttons */}
+                <div className="flex flex-col sm:flex-row gap-3 justify-center lg:justify-start mb-8"
+                  style={{ animation: 'slideUp 0.7s ease-out 0.3s both' }}>
+                  <button onClick={() => setShowAuth(true, 'signup')}
+                    className="group relative px-8 py-4 rounded-2xl font-bold text-base text-black overflow-hidden transition-all hover:scale-[1.02] hover:shadow-[0_0_30px_rgba(255,215,0,0.3)]"
+                    style={{ background: 'linear-gradient(135deg, #FFD700, #FFA500)' }}>
+                    <span className="relative z-10 flex items-center justify-center gap-2">
+                      Join MidasHub Free
+                      <span className="group-hover:translate-x-1 transition-transform">→</span>
+                    </span>
+                  </button>
+                  <button onClick={() => router.push('/feed')}
+                    className="px-8 py-4 rounded-2xl font-semibold text-base text-white/70 transition-all hover:text-white hover:bg-white/5"
+                    style={{ border: '1px solid rgba(255,255,255,0.1)' }}>
+                    Browse Feed
+                  </button>
+                </div>
+
+                {/* Stats row */}
+                <div className="grid grid-cols-4 gap-4 max-w-md mx-auto lg:mx-0"
+                  style={{ animation: 'slideUp 0.7s ease-out 0.4s both' }}>
+                  {STATS.map((stat, i) => (
+                    <div key={i} className="text-center lg:text-left">
+                      <div className="text-xl sm:text-2xl font-black accent-text">{stat.value}</div>
+                      <div className="text-[11px] text-white/30 font-medium mt-0.5">{stat.label}</div>
+                    </div>
+                  ))}
+                </div>
               </div>
-            ))}
+
+              {/* Right — Live feed preview */}
+              <div className="relative z-10 hidden sm:block" style={{ animation: 'slideUp 0.8s ease-out 0.3s both' }}>
+                <div className="relative">
+                  {/* Phone frame mockup */}
+                  <div className="relative mx-auto max-w-sm rounded-[2rem] p-[2px] overflow-hidden"
+                    style={{ background: 'linear-gradient(135deg, rgba(255,215,0,0.3), rgba(255,165,0,0.1), rgba(99,102,241,0.2))' }}>
+                    <div className="rounded-[calc(2rem-2px)] overflow-hidden" style={{ background: 'var(--bg)' }}>
+                      {/* Status bar */}
+                      <div className="flex items-center justify-between px-6 py-3" style={{ background: 'var(--card)' }}>
+                        <div className="flex items-center gap-2">
+                          <span className="text-base">⚡</span>
+                          <span className="text-xs font-bold accent-text">MIDASHUB</span>
+                        </div>
+                        <div className="flex gap-1">
+                          {['🌐', '🔥', '👥', '💬'].map((icon, i) => (
+                            <span key={i} className="text-[10px] opacity-40 px-1">{icon}</span>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Feed cards */}
+                      <div className="px-3 py-2 space-y-2 h-[420px] overflow-hidden">
+                        {FEED_PREVIEW.map((post, i) => (
+                          <div key={i}
+                            className="rounded-xl p-3 transition-all duration-500"
+                            style={{
+                              background: 'var(--card)',
+                              border: '1px solid var(--border)',
+                              opacity: i < visibleCards ? 1 : 0,
+                              transform: i < visibleCards ? 'translateY(0)' : 'translateY(12px)',
+                              transitionDelay: `${i * 80}ms`,
+                            }}>
+                            <div className="flex items-center gap-2 mb-1.5">
+                              <span className="text-lg">{post.avatar}</span>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-[11px] font-bold truncate">{post.name}</span>
+                                  <span className="text-[9px] px-1.5 py-0.5 rounded-full font-bold"
+                                    style={{ background: `${post.platformColor}18`, color: post.platformColor }}>
+                                    {post.platformIcon} {post.platform}
+                                  </span>
+                                </div>
+                              </div>
+                              <span className="text-[9px] text-white/20">{post.time}</span>
+                            </div>
+                            <p className="text-[11px] text-white/60 leading-relaxed line-clamp-2">{post.content}</p>
+                            <div className="flex items-center gap-3 mt-1.5 text-[10px] text-white/25">
+                              <span>❤️ {post.likes}</span>
+                              <span>💬</span>
+                              <span>🔄</span>
+                              {post.viral && <span className="ml-auto text-orange-400 font-bold">🔥 VIRAL</span>}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Floating platform badges around the phone */}
+                  {[
+                    { icon: '👻', color: '#FFFC00', top: '8%', left: '-8%', delay: '0s' },
+                    { icon: '📸', color: '#E4405F', top: '25%', right: '-10%', delay: '0.5s' },
+                    { icon: '🎵', color: '#69C9D0', bottom: '30%', left: '-12%', delay: '1s' },
+                    { icon: '📘', color: '#1877F2', bottom: '15%', right: '-8%', delay: '1.5s' },
+                    { icon: '𝕏', color: '#fff', top: '50%', left: '-6%', delay: '0.8s' },
+                    { icon: '▶️', color: '#FF0000', top: '5%', right: '-5%', delay: '1.2s' },
+                  ].map((badge, i) => (
+                    <div key={i} className="absolute w-10 h-10 rounded-xl flex items-center justify-center text-lg shadow-lg"
+                      style={{
+                        background: `${badge.color}15`,
+                        border: `1px solid ${badge.color}30`,
+                        top: badge.top, bottom: badge.bottom, left: badge.left, right: badge.right,
+                        animation: `badgeFloat 4s ease-in-out infinite ${badge.delay}`,
+                      }}>
+                      {badge.icon}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
           </div>
         </section>
 
-        <section className="py-12 sm:py-16 text-center">
-          <div className="glass-light rounded-2xl sm:rounded-3xl p-8 sm:p-12">
-            <h2 className="text-2xl sm:text-3xl font-black mb-3">Ready to see everything?</h2>
-            <p className="text-white/35 text-base mb-6 max-w-md mx-auto">Join people already seeing content from every platform in one place.</p>
-            <button onClick={() => setShowAuth(true, 'signup')} className="btn-primary text-base px-8 py-3.5 rounded-2xl">Create Free Account ⚡</button>
-            <p className="text-[11px] text-white/15 mt-3">Free forever · Ages 15+ · Email verification</p>
+        {/* ===== PLATFORM STRIP ===== */}
+        <section className="py-10 border-y" style={{ borderColor: 'var(--border)' }}>
+          <div className="max-w-6xl mx-auto px-4">
+            <p className="text-center text-xs text-white/20 font-semibold tracking-widest uppercase mb-6">
+              All your platforms in one place
+            </p>
+            <div className="flex items-center justify-center gap-3 sm:gap-5 flex-wrap">
+              {PLATFORM_LIST.map(([key, p]) => (
+                <div key={key} className="flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all hover:scale-105 cursor-default"
+                  style={{ background: `${p.color}08`, border: `1px solid ${p.color}15` }}>
+                  <span className="text-lg">{p.icon}</span>
+                  <span className="text-sm font-semibold hidden sm:block" style={{ color: `${p.color}CC` }}>{p.name}</span>
+                </div>
+              ))}
+            </div>
           </div>
         </section>
 
-        <footer className="py-6 border-t border-white/5 text-center text-sm text-white/15">
-          <span>⚡</span> <span className="font-bold accent-text">MidasHub</span> · All your socials, one place © {new Date().getFullYear()}
+        {/* ===== HOW IT WORKS ===== */}
+        <section className="py-16 sm:py-24">
+          <div className="max-w-5xl mx-auto px-4">
+            <div className="text-center mb-12">
+              <span className="text-xs font-bold tracking-widest uppercase text-white/20">How it works</span>
+              <h2 className="text-3xl sm:text-4xl font-black mt-3 mb-4">
+                Three steps to{' '}<span className="accent-text">everything</span>
+              </h2>
+              <p className="text-white/35 max-w-md mx-auto">No complicated setup. Join, connect, and see every post from everywhere.</p>
+            </div>
+
+            <div className="grid sm:grid-cols-3 gap-6">
+              {[
+                { step: '01', icon: '📧', title: 'Sign up free', desc: 'Create your account with email verification. Takes 30 seconds. Ages 15+.', color: '#FFD700' },
+                { step: '02', icon: '🔗', title: 'Connect your world', desc: 'Link your social profiles. Repost content from any platform into your MidasHub feed.', color: '#FFA500' },
+                { step: '03', icon: '🌍', title: 'See everything', desc: 'Browse all posts from everyone, everywhere. Like, comment, chat, go viral.', color: '#6366f1' },
+              ].map((item, i) => (
+                <div key={i} className="relative group">
+                  <div className="glass-light rounded-2xl p-6 hover-lift h-full">
+                    <div className="flex items-center gap-3 mb-4">
+                      <span className="text-3xl">{item.icon}</span>
+                      <span className="text-xs font-black tracking-wider" style={{ color: item.color }}>{item.step}</span>
+                    </div>
+                    <h3 className="text-lg font-bold mb-2">{item.title}</h3>
+                    <p className="text-sm text-white/35 leading-relaxed">{item.desc}</p>
+                  </div>
+                  {/* Connector line */}
+                  {i < 2 && (
+                    <div className="hidden sm:block absolute top-1/2 -right-3 w-6 text-white/10 text-center text-lg">→</div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* ===== FEATURES GRID ===== */}
+        <section className="py-16 sm:py-24" style={{ background: 'rgba(255,255,255,0.01)' }}>
+          <div className="max-w-5xl mx-auto px-4">
+            <div className="text-center mb-12">
+              <span className="text-xs font-bold tracking-widest uppercase text-white/20">Features</span>
+              <h2 className="text-3xl sm:text-4xl font-black mt-3">
+                Built for{' '}<span className="accent-text">real people</span>
+              </h2>
+            </div>
+
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {[
+                { icon: '🔥', title: 'Viral Discovery', desc: 'Posts auto-trend at 100+ likes. No algorithm hiding your content. Pure organic reach for everyone.', accent: '#ef4444' },
+                { icon: '💬', title: 'Real-time Chat', desc: 'Message anyone instantly. No friend request needed to see posts. Connect freely.', accent: '#22d3ee' },
+                { icon: '🚀', title: 'Cross-Post', desc: 'One-click buttons to jump to Snap, IG, TikTok, X and post there too. Share everywhere.', accent: '#8b5cf6' },
+                { icon: '🛡️', title: 'Verified Users', desc: 'Email verification keeps accounts real. No bots. No fakes. Real people only.', accent: '#22c55e' },
+                { icon: '👥', title: 'Find Anyone', desc: 'Discover people from all platforms. Add friends, build your network, grow your reach.', accent: '#f97316' },
+                { icon: '♾️', title: 'Zero Limits', desc: 'No character limits. No daily caps. No content restrictions. Post whatever you want, whenever.', accent: '#FFD700' },
+              ].map((feature, i) => (
+                <div key={i} className="glass-light rounded-2xl p-5 hover-lift group cursor-default">
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl mb-3 transition-transform group-hover:scale-110"
+                    style={{ background: `${feature.accent}12`, border: `1px solid ${feature.accent}20` }}>
+                    {feature.icon}
+                  </div>
+                  <h3 className="font-bold mb-1.5">{feature.title}</h3>
+                  <p className="text-sm text-white/30 leading-relaxed">{feature.desc}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* ===== SOCIAL PROOF ===== */}
+        <section className="py-16 sm:py-24">
+          <div className="max-w-4xl mx-auto px-4">
+            <div className="relative rounded-3xl overflow-hidden p-8 sm:p-14 text-center"
+              style={{ background: 'linear-gradient(135deg, rgba(255,215,0,0.06), rgba(255,165,0,0.03), rgba(99,102,241,0.04))' , border: '1px solid rgba(255,215,0,0.1)' }}>
+              {/* Background decoration */}
+              <div className="absolute inset-0 opacity-5" style={{
+                backgroundImage: 'radial-gradient(circle at 20% 50%, #FFD700 1px, transparent 1px), radial-gradient(circle at 80% 20%, #FFA500 1px, transparent 1px), radial-gradient(circle at 60% 80%, #6366f1 1px, transparent 1px)',
+                backgroundSize: '60px 60px, 80px 80px, 50px 50px'
+              }} />
+
+              <div className="relative z-10">
+                {/* Avatars row */}
+                <div className="flex items-center justify-center -space-x-2 mb-6">
+                  {['🧑🏾', '👩🏽', '👨🏼', '👩🏿', '👨🏻', '👩🏻', '🧑🏻', '👩🏾'].map((emoji, i) => (
+                    <div key={i} className="w-10 h-10 rounded-full flex items-center justify-center text-xl ring-2"
+                      style={{ background: 'var(--card)', ringColor: 'var(--bg)', animationDelay: `${i * 0.1}s` }}>
+                      {emoji}
+                    </div>
+                  ))}
+                  <div className="w-10 h-10 rounded-full flex items-center justify-center text-[10px] font-bold ring-2"
+                    style={{ background: 'rgba(255,215,0,0.15)', color: '#FFD700', ringColor: 'var(--bg)' }}>
+                    +999
+                  </div>
+                </div>
+
+                <h2 className="text-3xl sm:text-4xl font-black mb-4">
+                  Ready to see{' '}<span className="accent-text">everything</span>?
+                </h2>
+                <p className="text-white/35 text-base sm:text-lg mb-8 max-w-lg mx-auto leading-relaxed">
+                  Your friends are already here. Every meme, every story, every post — one place, zero effort.
+                </p>
+
+                <button onClick={() => setShowAuth(true, 'signup')}
+                  className="group px-10 py-4 rounded-2xl font-bold text-base text-black transition-all hover:scale-[1.02] hover:shadow-[0_0_40px_rgba(255,215,0,0.25)]"
+                  style={{ background: 'linear-gradient(135deg, #FFD700, #FFA500)' }}>
+                  <span className="flex items-center gap-2">
+                    Create Free Account
+                    <span className="group-hover:translate-x-1 transition-transform">⚡</span>
+                  </span>
+                </button>
+
+                <p className="text-[11px] text-white/15 mt-4 tracking-wide">
+                  Free forever · No credit card · Ages 15+ · Email verification
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ===== FOOTER ===== */}
+        <footer className="py-8 text-center" style={{ borderTop: '1px solid var(--border)' }}>
+          <div className="max-w-5xl mx-auto px-4">
+            <div className="flex items-center justify-center gap-2 mb-3">
+              <span className="text-lg">⚡</span>
+              <span className="text-base font-extrabold accent-text">MIDASHUB</span>
+            </div>
+            <p className="text-xs text-white/15">All your socials, one place. © {new Date().getFullYear()} MidasHub</p>
+            <div className="flex items-center justify-center gap-4 mt-3">
+              {[
+                { label: 'Feed', href: '/feed' },
+                { label: 'People', href: '/people' },
+                { label: 'Viral', href: '/viral' },
+              ].map((link, i) => (
+                <button key={i} onClick={() => router.push(link.href)} className="text-xs text-white/20 hover:text-white/50 transition">
+                  {link.label}
+                </button>
+              ))}
+            </div>
+          </div>
         </footer>
+
       </div>
+
+      {/* Extra keyframes */}
+      <style jsx global>{`
+        @keyframes heroFloat {
+          0%, 100% { transform: translate(0, 0) scale(1); }
+          33% { transform: translate(15px, -20px) scale(1.05); }
+          66% { transform: translate(-10px, 10px) scale(0.97); }
+        }
+        @keyframes badgeFloat {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-8px); }
+        }
+        @keyframes sparkle {
+          0%, 100% { opacity: 1; transform: scale(1) rotate(0deg); }
+          50% { opacity: 0.6; transform: scale(1.2) rotate(10deg); }
+        }
+        @keyframes drawLine {
+          from { stroke-dasharray: 200; stroke-dashoffset: 200; }
+          to { stroke-dasharray: 200; stroke-dashoffset: 0; }
+        }
+      `}</style>
     </AppShell>
   );
 }
 
 export default function Home() {
-  return <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="text-4xl animate-pulse">⚡</div></div>}><HomeInner /></Suspense>;
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--bg, #0a0a0f)' }}>
+        <div className="text-center">
+          <div className="text-5xl mb-3" style={{ animation: 'pulse 2s ease-in-out infinite' }}>⚡</div>
+          <div className="text-sm font-bold" style={{ color: '#FFD700' }}>Loading MidasHub...</div>
+        </div>
+      </div>
+    }>
+      <HomeInner />
+    </Suspense>
+  );
 }
