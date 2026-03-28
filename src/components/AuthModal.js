@@ -17,6 +17,22 @@ export default function AuthModal() {
 
   useEffect(() => { setMode(authMode); setStep(1); setError(''); setSuccess(''); }, [authMode, showAuth]);
 
+  // Lock body scroll when modal is open
+  useEffect(() => {
+    if (showAuth) {
+      const scrollY = window.scrollY;
+      document.body.style.position = 'fixed';
+      document.body.style.top = `-${scrollY}px`;
+      document.body.style.width = '100%';
+      return () => {
+        document.body.style.position = '';
+        document.body.style.top = '';
+        document.body.style.width = '';
+        window.scrollTo(0, scrollY);
+      };
+    }
+  }, [showAuth]);
+
   if (!showAuth) return null;
 
   const handleSignup = async () => {
@@ -70,9 +86,9 @@ export default function AuthModal() {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[999] flex items-center justify-center p-4 animate-fade-in"
+    <div className="modal-overlay"
       onClick={(e) => e.target === e.currentTarget && setShowAuth(false)}>
-      <div className="w-full max-w-md glass rounded-3xl overflow-hidden animate-slide-up max-h-[92vh] overflow-y-auto">
+      <div className="modal-content max-w-md overflow-hidden">
 
         {/* Header */}
         <div className="flex items-center justify-between p-5 pb-0">

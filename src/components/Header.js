@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useStore } from '@/lib/store';
 import { timeAgo } from '@/lib/constants';
 import { createClient } from '@/lib/supabase-browser';
+import { sendNotification } from '@/lib/notifications';
 import { RankBadge } from '@/components/RankBadge';
 
 export default function Header() {
@@ -181,11 +182,11 @@ export default function Header() {
                                   const supabase = createClient();
                                   try {
                                     await supabase.from('friendships').update({ status: 'accepted' }).or(`and(requester_id.eq.${n.from_user_id},addressee_id.eq.${user.id})`);
-                                    await supabase.from('notifications').insert({ user_id: n.from_user_id, from_user_id: user.id, type: 'friend_accepted', content: `${profile?.display_name} accepted your friend request` });
+                                    sendNotification({ toUserId: n.from_user_id, fromUserId: user.id, type: 'friend_accepted', content: 'accepted your friend request 🤝' });
                                     fetchNotifications();
                                     useStore.getState().showToast('Friend request accepted ✓');
                                   } catch (e) {}
-                                }} className="btn-primary py-1 px-3 text-[10px]">Accept</button>
+                                }} className="btn-primary py-1.5 px-3 text-[11px]">Accept</button>
                                 <button onClick={async () => {
                                   const supabase = createClient();
                                   try {

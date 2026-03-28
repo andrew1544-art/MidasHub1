@@ -28,6 +28,22 @@ export default function ComposeModal() {
     }
   }, [showCompose]);
 
+  // Lock body scroll when modal is open
+  useEffect(() => {
+    if (showCompose) {
+      const scrollY = window.scrollY;
+      document.body.style.position = 'fixed';
+      document.body.style.top = `-${scrollY}px`;
+      document.body.style.width = '100%';
+      return () => {
+        document.body.style.position = '';
+        document.body.style.top = '';
+        document.body.style.width = '';
+        window.scrollTo(0, scrollY);
+      };
+    }
+  }, [showCompose]);
+
   if (!showCompose || !user) return null;
 
   const handleMedia = (e) => {
@@ -71,9 +87,9 @@ export default function ComposeModal() {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[999] flex items-center justify-center p-3 sm:p-4"
+    <div className="modal-overlay"
       onClick={(e) => e.target === e.currentTarget && !loading && setShowCompose(false)}>
-      <div className="w-full max-w-lg glass rounded-2xl sm:rounded-3xl p-5 sm:p-6 max-h-[90vh] overflow-y-auto">
+      <div className="modal-content max-w-lg p-5 sm:p-6">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-bold">{quote ? '💬 Repost with Comment' : 'Create Post ⚡'}</h3>
           <button onClick={() => !loading && setShowCompose(false)} className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-white/40 hover:text-white text-sm transition">✕</button>
@@ -101,7 +117,8 @@ export default function ComposeModal() {
 
         <textarea value={content} onChange={(e) => setContent(e.target.value)} autoFocus
           placeholder={quote ? "Add your thoughts about this post..." : "What's on your mind? Share anything..."}
-          className="w-full h-28 p-3 rounded-xl bg-white/5 border border-white/8 text-white text-sm resize-none outline-none focus:border-[var(--accent)] leading-relaxed placeholder:text-white/25" />
+          className="w-full h-28 p-3 rounded-xl bg-white/5 border border-white/8 text-white resize-none outline-none focus:border-[var(--accent)] leading-relaxed placeholder:text-white/25"
+          style={{ fontSize: '16px' }} />
         <div className="text-[11px] text-white/15 text-right mt-1">{content.length} chars</div>
 
         {mediaPreviews.length > 0 && (

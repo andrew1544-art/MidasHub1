@@ -7,6 +7,7 @@ import PostCard from '@/components/PostCard';
 import { RankBadge, RankCard } from '@/components/RankBadge';
 import { useStore } from '@/lib/store';
 import { createClient } from '@/lib/supabase-browser';
+import { sendNotification } from '@/lib/notifications';
 import { PLATFORM_LIST, formatCount } from '@/lib/constants';
 
 export default function ProfilePage() {
@@ -63,7 +64,7 @@ export default function ProfilePage() {
     if (friendStatus === 'none') {
       const { data } = await supabase.from('friendships').insert({ requester_id: user.id, addressee_id: prof.id }).select().single();
       if (data) { setFriendStatus('pending_sent'); setFriendshipId(data.id);
-        await supabase.from('notifications').insert({ user_id: prof.id, from_user_id: user.id, type: 'friend_request' });
+        sendNotification({ toUserId: prof.id, fromUserId: user.id, type: 'friend_request', content: 'sent you a friend request 👋' });
         showToast('Friend request sent ✓');
       }
     } else if (friendStatus === 'pending_received') {

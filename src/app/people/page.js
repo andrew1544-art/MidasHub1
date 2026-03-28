@@ -5,6 +5,7 @@ import AppShell from '@/components/AppShell';
 import { RankBadge } from '@/components/RankBadge';
 import { useStore } from '@/lib/store';
 import { createClient } from '@/lib/supabase-browser';
+import { sendNotification } from '@/lib/notifications';
 import { timeAgo } from '@/lib/constants';
 
 export default function PeoplePage() {
@@ -57,7 +58,7 @@ export default function PeoplePage() {
     const supabase = createClient();
     await supabase.from('friendships').insert({ requester_id: user.id, addressee_id: id });
     setPendingIds(prev => new Set([...prev, id]));
-    await supabase.from('notifications').insert({ user_id: id, from_user_id: user.id, type: 'friend_request', content: `sent you a friend request` });
+    sendNotification({ toUserId: id, fromUserId: user.id, type: 'friend_request', content: 'sent you a friend request 👋' });
     showToast('Friend request sent ✓');
   };
 
@@ -65,7 +66,7 @@ export default function PeoplePage() {
     const supabase = createClient();
     await supabase.from('friendships').update({ status: 'accepted' }).eq('id', shipId);
     setRequests(prev => prev.filter(r => r.id !== shipId));
-    await supabase.from('notifications').insert({ user_id: requesterId, from_user_id: user.id, type: 'friend_accepted', content: `accepted your friend request` });
+    sendNotification({ toUserId: requesterId, fromUserId: user.id, type: 'friend_accepted', content: 'accepted your friend request 🤝' });
     showToast('Friend request accepted ✓');
   };
 
