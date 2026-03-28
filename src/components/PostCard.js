@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase-browser';
 import { sendNotification } from '@/lib/notifications';
 import { PLATFORMS, formatCount, timeAgo } from '@/lib/constants';
 import { RankBadge } from '@/components/RankBadge';
+import MediaViewer from '@/components/MediaViewer';
 
 function CommentItem({ comment, postOwnerId, onDelete }) {
   const { user, showToast } = useStore();
@@ -105,6 +106,8 @@ export default function PostCard({ post, onPostUpdated }) {
   const [displayContent, setDisplayContent] = useState(post.content);
   const [savingEdit, setSavingEdit] = useState(false);
   const [showRepostMenu, setShowRepostMenu] = useState(false);
+  const [viewerOpen, setViewerOpen] = useState(false);
+  const [viewerIndex, setViewerIndex] = useState(0);
   const optionsRef = useRef(null);
   const shareRef = useRef(null);
   const repostRef = useRef(null);
@@ -287,9 +290,38 @@ export default function PostCard({ post, onPostUpdated }) {
       {post.tags?.length > 0 && <div className="flex flex-wrap gap-1.5 mt-2">{post.tags.map(tag => <span key={tag} className="text-xs text-[var(--accent)] opacity-70">#{tag}</span>)}</div>}
 
       {post.media_urls?.length > 0 && (
-        <div className={`grid gap-1.5 mt-3 rounded-xl overflow-hidden ${post.media_urls.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}`}>
-          {post.media_urls.map((url, i) => <div key={i} className="aspect-video bg-white/5 rounded-xl overflow-hidden"><img src={url} alt="" className="w-full h-full object-cover" loading="lazy" /></div>)}
-        </div>
+        <>
+          <div className={`grid gap-1.5 mt-3 rounded-xl overflow-hidden ${post.media_urls.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}`}>
+            {post.media_urls.map((url, i) => {
+              const isVid = /\.(mp4|webm|mov|avi|ogg)$/i.test(url) || post.media_type === 'video';
+              return (
+                <div key={i} className="aspect-video bg-white/5 rounded-xl overflow-hidden relative cursor-pointer group"
+                  onClick={() => { setViewerIndex(i); setViewerOpen(true); }}>
+                  {isVid ? (
+                    <>
+                      <video src={url} className="w-full h-full object-cover" preload="metadata" muted />
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/30 transition">
+                        <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur flex items-center justify-center text-xl">▶</div>
+                      </div>
+                    </>
+                  ) : (
+                    <img src={url} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          {viewerOpen && (
+            <MediaViewer
+              media={post.media_urls.map(url => ({
+                url,
+                type: /\.(mp4|webm|mov|avi|ogg)$/i.test(url) || post.media_type === 'video' ? 'video' : 'image',
+              }))}
+              startIndex={viewerIndex}
+              onClose={() => setViewerOpen(false)}
+            />
+          )}
+        </>
       )}
 
       <div className="flex items-center gap-0.5 mt-3 pt-3 border-t border-white/5">

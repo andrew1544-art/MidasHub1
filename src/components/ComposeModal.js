@@ -48,8 +48,13 @@ export default function ComposeModal() {
 
   const handleMedia = (e) => {
     const files = Array.from(e.target.files).slice(0, 4);
-    setMediaFiles(files);
-    setMediaPreviews(files.map(f => URL.createObjectURL(f)));
+    setMediaFiles(prev => [...prev, ...files].slice(0, 4));
+    setMediaPreviews(prev => [...prev, ...files.map(f => ({ url: URL.createObjectURL(f), isVideo: f.type.startsWith('video/') }))].slice(0, 4));
+  };
+
+  const removeMedia = (idx) => {
+    setMediaFiles(prev => prev.filter((_, j) => j !== idx));
+    setMediaPreviews(prev => prev.filter((_, j) => j !== idx));
   };
 
   const handlePost = async () => {
@@ -58,8 +63,10 @@ export default function ComposeModal() {
     try {
       const supabase = createClient();
       let mediaUrls = [];
+      let hasVideo = false;
       for (const file of mediaFiles) {
         try {
+          if (file.type.startsWith('video/')) hasVideo = true;
           const ext = file.name.split('.').pop();
           const path = `${user.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
           const { data, error: ue } = await supabase.storage.from('media').upload(path, file);
@@ -75,7 +82,7 @@ export default function ComposeModal() {
       const { error: postErr } = await supabase.from('posts').insert({
         user_id: user.id, content: finalContent, source_platform: sourcePlatform,
         source_url: sourceUrl.trim() || null, media_urls: mediaUrls,
-        media_type: mediaUrls.length > 0 ? 'image' : null, tags: parsedTags,
+        media_type: mediaUrls.length > 0 ? (hasVideo ? 'video' : 'image') : null, tags: parsedTags,
       });
       if (postErr) { setError('Failed to post: ' + (postErr.message || 'Unknown error')); setLoading(false); return; }
       setContent(''); setSourcePlatform('midashub'); setSourceUrl(''); setTags('');
@@ -123,11 +130,21 @@ export default function ComposeModal() {
 
         {mediaPreviews.length > 0 && (
           <div className="grid grid-cols-2 gap-1.5 my-3">
-            {mediaPreviews.map((url, i) => (
+            {mediaPreviews.map((item, i) => (
               <div key={i} className="relative aspect-video rounded-xl overflow-hidden bg-white/5">
-                <img src={url} alt="" className="w-full h-full object-cover" />
-                <button onClick={() => { setMediaFiles(mediaFiles.filter((_, j) => j !== i)); setMediaPreviews(mediaPreviews.filter((_, j) => j !== i)); }}
-                  className="absolute top-1.5 right-1.5 w-6 h-6 bg-black/60 rounded-full flex items-center justify-center text-xs">✕</button>
+                {item.isVideo ? (
+                  <>
+                    <video src={item.url} className="w-full h-full object-cover" preload="metadata" />
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                      <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-lg">▶</div>
+                    </div>
+                    <div className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded bg-black/60 text-[9px] text-white/70 font-semibold">VIDEO</div>
+                  </>
+                ) : (
+                  <img src={item.url} alt="" className="w-full h-full object-cover" />
+                )}
+                <button onClick={() => removeMedia(i)}
+                  className="absolute top-1.5 right-1.5 w-6 h-6 bg-black/60 rounded-full flex items-center justify-center text-xs text-white/80">✕</button>
               </div>
             ))}
           </div>

@@ -4,6 +4,7 @@ import { useStore } from '@/lib/store';
 import Header from '@/components/Header';
 import AuthModal from '@/components/AuthModal';
 import ComposeModal from '@/components/ComposeModal';
+import InstallPrompt from '@/components/InstallPrompt';
 
 export default function AppShell({ children }) {
   const { initAuth, loading, theme, loadTheme, toast } = useStore();
@@ -39,6 +40,7 @@ export default function AppShell({ children }) {
       <main className="pb-20 md:pb-8">{children}</main>
       <AuthModal />
       <ComposeModal />
+      <InstallPrompt />
       {toast && <div className="toast">{toast}</div>}
     </>
   );
