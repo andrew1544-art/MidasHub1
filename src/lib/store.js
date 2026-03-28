@@ -25,7 +25,6 @@ async function loadProfile(supabase, userId) {
   } catch (e) { return null; }
 }
 
-// Track if auth listener is already set up — prevents duplicates across navigations
 let authInitialized = false;
 
 export const useStore = create((set, get) => ({
@@ -57,45 +56,77 @@ export const useStore = create((set, get) => ({
   },
 
   initAuth: async () => {
-    // Only set up auth listener ONCE across all mounts
-    if (authInitialized) {
-      // Already initialized — just make sure loading is false
-      const { user } = get();
-      if (get().loading && user) set({ loading: false });
-      if (get().loading) set({ loading: false });
-      return;
-    }
+    // Prevent multiple initializations
+    if (authInitialized) return;
     authInitialized = true;
 
     const supabase = getSupabase();
     if (!supabase) { set({ loading: false }); return; }
 
-    try {
-      // Set up listener FIRST
-      supabase.auth.onAuthStateChange(async (event, session) => {
-        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
-          if (session?.user) {
-            const profile = await loadProfile(supabase, session.user.id);
-            set({ user: session.user, profile, loading: false });
-          } else {
-            set({ loading: false });
-          }
-        } else if (event === 'SIGNED_OUT') {
-          set({ user: null, profile: null, loading: false });
-        }
-      });
+    // HARD SAFETY NET: No matter what happens, loading MUST end within 4 seconds
+    const safetyTimeout = setTimeout(() => {
+      const { loading } = get();
+      if (loading) {
+        console.warn('MidasHub: Auth timed out, forcing load');
+        set({ loading: false });
+      }
+    }, 4000);
 
-      // Then trigger session check
-      const { data: { session } } = await supabase.auth.getSession();
+    try {
+      // 1. Get session directly — this is the fastest path
+      const { data: { session }, error } = await supabase.auth.getSession();
+
       if (session?.user) {
         const profile = await loadProfile(supabase, session.user.id);
         set({ user: session.user, profile, loading: false });
       } else {
-        setTimeout(() => { if (get().loading) set({ loading: false }); }, 1500);
+        set({ loading: false });
       }
+
+      clearTimeout(safetyTimeout);
+
+      // 2. Set up listener AFTER we're already loaded — for future changes only
+      supabase.auth.onAuthStateChange(async (event, session) => {
+        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+          if (session?.user) {
+            const profile = await loadProfile(supabase, session.user.id);
+            set({ user: session.user, profile, loading: false });
+          }
+        } else if (event === 'SIGNED_OUT') {
+          set({ user: null, profile: null });
+        }
+      });
+
     } catch (err) {
       console.error('Auth init error:', err);
+      clearTimeout(safetyTimeout);
       set({ loading: false });
+    }
+
+    // 3. Handle tab visibility — refresh session when user comes back
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', async () => {
+        if (document.visibilityState === 'visible') {
+          try {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session?.user) {
+              const { user: currentUser } = get();
+              // Only update if user changed or was null
+              if (!currentUser || currentUser.id !== session.user.id) {
+                const profile = await loadProfile(supabase, session.user.id);
+                set({ user: session.user, profile });
+              }
+            } else {
+              const { user: currentUser } = get();
+              if (currentUser) {
+                set({ user: null, profile: null });
+              }
+            }
+          } catch (e) {
+            // Silently ignore — user stays with whatever state they had
+          }
+        }
+      });
     }
   },
 
