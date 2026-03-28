@@ -27,22 +27,24 @@ function CommentItem({ comment, postOwnerId, onDelete, onEdit }) {
     try {
       const supabase = createClient();
       const { error } = await supabase.from('comments').update({ content: editText.trim() }).eq('id', comment.id);
-      if (!error) { comment.content = editText.trim(); setEditing(false); showToast?.('Comment updated'); }
-    } catch (e) {}
+      if (!error) { comment.content = editText.trim(); setEditing(false); showToast?.('Comment updated ✓'); }
+      else { showToast?.('Failed to update comment'); }
+    } catch (e) { showToast?.('Error saving comment'); }
     setSaving(false);
   };
 
   const handleDelete = async () => {
+    if (!confirm('Delete this comment?')) return;
     try {
       const supabase = createClient();
       await supabase.from('comments').delete().eq('id', comment.id);
       onDelete?.(comment.id);
       showToast?.('Comment deleted');
-    } catch (e) {}
+    } catch (e) { showToast?.('Failed to delete comment'); }
   };
 
   return (
-    <div className="flex gap-2 group">
+    <div className="flex gap-2">
       <Link href={`/profile/${comment.profiles?.username || 'unknown'}`} className="text-lg shrink-0 mt-0.5">
         {comment.profiles?.avatar_emoji || '😎'}
       </Link>
@@ -57,16 +59,16 @@ function CommentItem({ comment, postOwnerId, onDelete, onEdit }) {
             {(isOwner || isPostOwner) && (
               <div className="relative ml-auto" ref={menuRef}>
                 <button onClick={() => setShowMenu(!showMenu)}
-                  className="opacity-0 group-hover:opacity-100 w-5 h-5 rounded-full flex items-center justify-center text-white/20 hover:text-white/50 text-[10px] transition">⋯</button>
+                  className="w-6 h-6 rounded-full flex items-center justify-center text-white/30 hover:text-white/60 hover:bg-white/10 text-xs transition">⋯</button>
                 {showMenu && (
-                  <div className="absolute top-6 right-0 glass rounded-lg p-1 w-32 shadow-xl z-20">
+                  <div className="absolute top-7 right-0 glass rounded-lg p-1 w-36 shadow-xl z-20">
                     {isOwner && (
                       <button onClick={() => { setEditing(true); setEditText(comment.content); setShowMenu(false); }}
-                        className="w-full flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs hover:bg-white/5 transition text-left">✏️ Edit</button>
+                        className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs hover:bg-white/5 transition text-left">✏️ Edit comment</button>
                     )}
                     <button onClick={() => { handleDelete(); setShowMenu(false); }}
-                      className="w-full flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs hover:bg-red-500/10 text-red-400 transition text-left">
-                      🗑️ Delete
+                      className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs hover:bg-red-500/10 text-red-400 transition text-left">
+                      🗑️ Delete comment
                     </button>
                   </div>
                 )}
