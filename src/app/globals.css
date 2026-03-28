@@ -47,22 +47,12 @@
 
 body {
   font-family: 'Outfit', system-ui, -apple-system, sans-serif;
-  background: var(--bg);
+  background: var(--gradient);
+  background-attachment: fixed;
   color: #fff;
   min-height: 100vh;
   overflow-x: hidden;
 }
-
-body::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  background: var(--gradient);
-  pointer-events: none;
-  z-index: 0;
-}
-
-#__next { position: relative; z-index: 1; }
 
 .glass {
   background: color-mix(in srgb, var(--card) 90%, transparent);
