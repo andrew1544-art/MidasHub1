@@ -246,7 +246,13 @@ function ChatInner() {
                       <span className="text-2xl">{otherUser?.avatar_emoji || '😎'}</span>
                       <div className="min-w-0">
                         <div className="font-bold text-sm truncate">{otherUser?.display_name || 'User'}</div>
-                        <div className="text-[11px] text-green-400">● Online</div>
+                        {(() => {
+                          const lastSeen = otherUser?.last_seen ? new Date(otherUser.last_seen) : null;
+                          const isOnline = lastSeen && (Date.now() - lastSeen.getTime() < 30 * 60 * 1000);
+                          return isOnline
+                            ? <div className="text-[11px] text-green-400">● Online</div>
+                            : <div className="text-[11px] text-white/25">{lastSeen ? `Last seen ${timeAgo(otherUser.last_seen)}` : '● Offline'}</div>;
+                        })()}
                       </div>
                     </Link>
                     <div className="flex items-center gap-2 shrink-0">
