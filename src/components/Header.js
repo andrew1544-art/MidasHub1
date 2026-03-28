@@ -53,12 +53,17 @@ export default function Header() {
   useEffect(() => {
     if (!search.trim()) { setSearchResults([]); return; }
     const t = setTimeout(async () => {
-      const supabase = createClient();
-      const { data } = await supabase.from('profiles')
-        .select('id, username, display_name, avatar_emoji, bio, xp')
-        .or(`username.ilike.%${search}%,display_name.ilike.%${search}%`)
-        .limit(8);
-      setSearchResults(data || []);
+      // Strip @ and clean the query
+      const q = search.trim().replace(/^@+/, '').toLowerCase();
+      if (!q) { setSearchResults([]); return; }
+      try {
+        const supabase = createClient();
+        const { data } = await supabase.from('profiles')
+          .select('id, username, display_name, avatar_emoji, bio, xp')
+          .or(`username.ilike.%${q}%,display_name.ilike.%${q}%`)
+          .limit(8);
+        setSearchResults(data || []);
+      } catch (e) { setSearchResults([]); }
     }, 250);
     return () => clearTimeout(t);
   }, [search]);
