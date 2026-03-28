@@ -142,17 +142,20 @@ body::before {
 }
 
 @keyframes slideUp {
-  from { opacity: 0; transform: translateY(16px); }
-  to { opacity: 1; transform: translateY(0); }
+  from { transform: translateY(8px); }
+  to { transform: translateY(0); }
 }
-@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes fadeIn {
+  from { transform: scale(0.98); }
+  to { transform: scale(1); }
+}
 @keyframes glow {
   0%,100% { box-shadow: 0 0 15px color-mix(in srgb, var(--accent) 20%, transparent); }
   50% { box-shadow: 0 0 30px color-mix(in srgb, var(--accent) 40%, transparent); }
 }
 
-.animate-slide-up { animation: slideUp 0.35s ease-out; }
-.animate-fade-in { animation: fadeIn 0.3s ease-out; }
+.animate-slide-up { animation: slideUp 0.3s ease-out; }
+.animate-fade-in { animation: fadeIn 0.2s ease-out; }
 .animate-glow { animation: glow 3s ease-in-out infinite; }
 
 .toast {
