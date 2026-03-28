@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import AppShell from '@/components/AppShell';
+import { RankBadge } from '@/components/RankBadge';
 import { useStore } from '@/lib/store';
 import { createClient } from '@/lib/supabase-browser';
 import { timeAgo } from '@/lib/constants';
@@ -80,6 +81,7 @@ export default function PeoplePage() {
         <div className="text-5xl mb-3 group-hover:scale-110 transition-transform inline-block">{person.avatar_emoji || '😎'}</div>
         <div className="font-bold text-sm truncate">{person.display_name}</div>
         <div className="text-xs text-white/25 truncate mt-0.5">@{person.username}</div>
+        <div className="flex justify-center mt-1.5"><RankBadge xp={person.xp || 0} size="xs" /></div>
       </Link>
       {person.bio && <div className="text-xs text-white/35 mt-2 line-clamp-2 leading-relaxed">{person.bio}</div>}
       {person.location && <div className="text-[11px] text-white/15 mt-1.5">📍 {person.location}</div>}

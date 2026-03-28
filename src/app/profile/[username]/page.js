@@ -4,6 +4,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import AppShell from '@/components/AppShell';
 import PostCard from '@/components/PostCard';
+import { RankBadge, RankCard } from '@/components/RankBadge';
 import { useStore } from '@/lib/store';
 import { createClient } from '@/lib/supabase-browser';
 import { PLATFORM_LIST, formatCount } from '@/lib/constants';
@@ -100,15 +101,19 @@ export default function ProfilePage() {
             <div className="text-6xl sm:text-7xl mb-3">{prof.avatar_emoji || '😎'}</div>
             <h1 className="text-2xl font-black">{prof.display_name}</h1>
             <p className="text-white/30 text-sm">@{prof.username}</p>
+            <div className="flex justify-center mt-2">
+              <RankBadge xp={prof.xp || 0} size="md" />
+            </div>
             {prof.bio && <p className="text-white/50 text-sm mt-3 max-w-sm mx-auto leading-relaxed">{prof.bio}</p>}
             {prof.location && <p className="text-white/20 text-xs mt-2">📍 {prof.location}</p>}
 
             {/* Stats */}
-            <div className="flex justify-center gap-10 mt-6">
+            <div className="flex justify-center gap-8 mt-6">
               {[
                 { val: formatCount(stats.posts), label: 'Posts' },
                 { val: formatCount(stats.friends), label: 'Friends' },
                 { val: formatCount(stats.likes), label: 'Likes' },
+                { val: formatCount(prof.xp || 0), label: 'XP' },
               ].map((s, i) => (
                 <div key={i} className="text-center">
                   <div className="font-black text-xl">{s.val}</div>
@@ -145,6 +150,11 @@ export default function ProfilePage() {
             )}
             {isOwn && <Link href="/settings" className="inline-block mt-6 btn-secondary px-6 py-2.5 text-sm">⚙️ Edit Profile</Link>}
           </div>
+        </div>
+
+        {/* Rank Card */}
+        <div className="mb-6">
+          <RankCard xp={prof.xp || 0} />
         </div>
 
         {/* Tabs */}

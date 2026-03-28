@@ -27,6 +27,19 @@ async function loadProfile(supabase, userId) {
 
 let authInitialized = false;
 
+async function awardDailyLogin(supabase, userId, set) {
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    const key = `midashub-daily-${today}`;
+    if (typeof window !== 'undefined' && localStorage.getItem(key)) return;
+    await supabase.rpc('award_xp', { target_user_id: userId, amount: 15 });
+    if (typeof window !== 'undefined') localStorage.setItem(key, '1');
+    // Refresh profile to show new XP
+    const profile = await loadProfile(supabase, userId);
+    if (profile) set({ profile });
+  } catch (e) {}
+}
+
 export const useStore = create((set, get) => ({
   user: null,
   profile: null,
@@ -79,6 +92,8 @@ export const useStore = create((set, get) => ({
       if (session?.user) {
         const profile = await loadProfile(supabase, session.user.id);
         set({ user: session.user, profile, loading: false });
+        // Award daily login XP
+        awardDailyLogin(supabase, session.user.id, set);
       } else {
         set({ loading: false });
       }

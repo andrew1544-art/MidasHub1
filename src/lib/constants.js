@@ -151,3 +151,50 @@ export function timeAgo(date) {
   if (days < 7) return `${days}d ago`;
   return d.toLocaleDateString();
 }
+
+// ===== RANKING SYSTEM =====
+// XP earned: post=10, receive_like=2, give_like=1, comment=5, receive_comment=3,
+// repost=5, get_reposted=8, add_friend=5, friend_accepted=5, daily_login=15, go_viral=50, send_message=1
+
+export const RANKS = [
+  { level: 1,  name: 'Seedling',    icon: '🌱', color: '#8B9467', minXP: 0,      perk: 'Just planted — your journey begins' },
+  { level: 2,  name: 'Spark',       icon: '✨', color: '#C0C0C0', minXP: 50,     perk: 'Starting to glow' },
+  { level: 3,  name: 'Wave',        icon: '🌊', color: '#5B9BD5', minXP: 200,    perk: 'Making ripples' },
+  { level: 4,  name: 'Flame',       icon: '🔥', color: '#FF6B35', minXP: 500,    perk: 'Heating up the feed' },
+  { level: 5,  name: 'Bolt',        icon: '⚡', color: '#FFD700', minXP: 1200,   perk: 'Electrifying presence' },
+  { level: 6,  name: 'Comet',       icon: '☄️', color: '#FF4500', minXP: 2500,   perk: 'Blazing through the hub' },
+  { level: 7,  name: 'Titan',       icon: '🗿', color: '#9B59B6', minXP: 5000,   perk: 'Unmovable force' },
+  { level: 8,  name: 'Phoenix',     icon: '🦅', color: '#E74C3C', minXP: 10000,  perk: 'Rising from the ordinary' },
+  { level: 9,  name: 'Crown',       icon: '👑', color: '#F1C40F', minXP: 20000,  perk: 'Royalty of the hub' },
+  { level: 10, name: 'Midas',       icon: '💎', color: '#FFD700', minXP: 50000,  perk: 'Everything you touch turns gold' },
+  { level: 11, name: 'Eternal',     icon: '♾️', color: '#E8D5B7', minXP: 100000, perk: 'Legendary — forever remembered' },
+];
+
+export function getRank(xp = 0) {
+  let rank = RANKS[0];
+  for (const r of RANKS) {
+    if (xp >= r.minXP) rank = r;
+    else break;
+  }
+  const currentIndex = RANKS.indexOf(rank);
+  const nextRank = RANKS[currentIndex + 1] || null;
+  const xpInLevel = xp - rank.minXP;
+  const xpNeeded = nextRank ? nextRank.minXP - rank.minXP : 0;
+  const progress = nextRank ? Math.min(xpInLevel / xpNeeded, 1) : 1;
+  return { ...rank, xp, xpInLevel, xpNeeded, nextRank, progress };
+}
+
+export const XP_VALUES = {
+  post: 10,
+  receive_like: 2,
+  give_like: 1,
+  comment: 5,
+  receive_comment: 3,
+  repost: 5,
+  get_reposted: 8,
+  add_friend: 5,
+  friend_accepted: 5,
+  daily_login: 15,
+  go_viral: 50,
+  send_message: 1,
+};

@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useStore } from '@/lib/store';
 import { createClient } from '@/lib/supabase-browser';
 import { PLATFORMS, formatCount, timeAgo } from '@/lib/constants';
+import { RankBadge } from '@/components/RankBadge';
 
 function CommentItem({ comment, postOwnerId, onDelete, onEdit }) {
   const { user, showToast } = useStore();
@@ -54,6 +55,7 @@ function CommentItem({ comment, postOwnerId, onDelete, onEdit }) {
             <Link href={`/profile/${comment.profiles?.username || 'unknown'}`} className="font-semibold text-xs hover:underline">
               {comment.profiles?.display_name || 'User'}
             </Link>
+            <RankBadge xp={comment.profiles?.xp || 0} size="xs" />
             <span className="text-[10px] text-white/20">{timeAgo(comment.created_at)}</span>
             {/* Menu for owner or post owner */}
             {(isOwner || isPostOwner) && (
@@ -270,6 +272,7 @@ export default function PostCard({ post, onPostUpdated }) {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <Link href={`/profile/${postUser.username || 'unknown'}`} className="font-bold text-sm hover:underline truncate">{postUser.display_name || 'User'}</Link>
+            <RankBadge xp={postUser.xp || 0} size="xs" />
             <span className="text-xs text-white/25 truncate">@{postUser.username || 'user'}</span>
           </div>
           <div className="flex items-center gap-2 mt-0.5">

@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useStore } from '@/lib/store';
 import { timeAgo } from '@/lib/constants';
 import { createClient } from '@/lib/supabase-browser';
+import { RankBadge } from '@/components/RankBadge';
 
 export default function Header() {
   const pathname = usePathname();
@@ -42,7 +43,7 @@ export default function Header() {
     const t = setTimeout(async () => {
       const supabase = createClient();
       const { data } = await supabase.from('profiles')
-        .select('id, username, display_name, avatar_emoji, bio')
+        .select('id, username, display_name, avatar_emoji, bio, xp')
         .or(`username.ilike.%${search}%,display_name.ilike.%${search}%`)
         .limit(8);
       setSearchResults(data || []);
@@ -63,6 +64,7 @@ export default function Header() {
     { href: '/feed', icon: '🏠', label: 'Feed' },
     { href: '/viral', icon: '🔥', label: 'Viral' },
     { href: '/people', icon: '👥', label: 'People' },
+    { href: '/leaderboard', icon: '🏆', label: 'Ranks' },
     { href: '/chat', icon: '💬', label: 'Chat' },
   ];
 
@@ -95,7 +97,7 @@ export default function Header() {
                     className="w-full flex items-center gap-3 p-2.5 rounded-lg hover:bg-white/5 transition text-left">
                     <span className="text-2xl">{u.avatar_emoji || '😎'}</span>
                     <div className="min-w-0">
-                      <div className="font-semibold text-sm truncate">{u.display_name}</div>
+                      <div className="flex items-center gap-1.5"><span className="font-semibold text-sm truncate">{u.display_name}</span><RankBadge xp={u.xp || 0} size="xs" /></div>
                       <div className="text-xs text-white/30 truncate">@{u.username}</div>
                     </div>
                   </button>
@@ -214,8 +216,11 @@ export default function Header() {
                   <Link href={`/profile/${profile?.username}`} className="flex items-center gap-2.5 p-2.5 rounded-lg hover:bg-white/5 transition" onClick={() => setShowMenu(false)}>
                     <span className="text-2xl">{profile?.avatar_emoji || '😎'}</span>
                     <div className="min-w-0">
-                      <div className="font-semibold text-sm truncate">{profile?.display_name}</div>
-                      <div className="text-[11px] text-white/30 truncate">@{profile?.username}</div>
+                      <div className="flex items-center gap-1.5"><span className="font-semibold text-sm truncate">{profile?.display_name}</span></div>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <span className="text-[11px] text-white/30 truncate">@{profile?.username}</span>
+                        <RankBadge xp={profile?.xp || 0} size="xs" />
+                      </div>
                     </div>
                   </Link>
                   <div className="border-t border-white/5 my-1" />
