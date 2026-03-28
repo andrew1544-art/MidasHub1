@@ -15,15 +15,12 @@ export const useStore = create((set, get) => ({
   showCompose: false,
   showAuth: false,
   authMode: 'signup',
-  theme: 'midnight',
   toast: null,
+  theme: 'default',
 
   setShowCompose: (v) => set({ showCompose: v }),
   setShowAuth: (v, mode = 'signup') => set({ showAuth: v, authMode: mode }),
-  setTheme: (t) => {
-    set({ theme: t });
-    if (typeof window !== 'undefined') localStorage.setItem('midashub_theme', t);
-  },
+
   showToast: (msg) => {
     set({ toast: msg });
     setTimeout(() => set({ toast: null }), 3000);
@@ -31,8 +28,13 @@ export const useStore = create((set, get) => ({
 
   loadTheme: () => {
     if (typeof window === 'undefined') return;
-    const saved = localStorage.getItem('midashub_theme');
-    if (saved) set({ theme: saved });
+    const saved = localStorage.getItem('midashub-theme') || 'default';
+    set({ theme: saved });
+  },
+
+  setTheme: (t) => {
+    set({ theme: t });
+    if (typeof window !== 'undefined') localStorage.setItem('midashub-theme', t);
   },
 
   initAuth: async () => {
@@ -41,27 +43,14 @@ export const useStore = create((set, get) => ({
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', session.user.id)
-          .single();
+        const { data: profile } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
         set({ user: session.user, profile, loading: false });
       } else {
         set({ loading: false });
       }
-
       supabase.auth.onAuthStateChange(async (event, session) => {
-        if (event === 'SIGNED_OUT') {
-          set({ user: null, profile: null });
-          return;
-        }
         if (session?.user) {
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', session.user.id)
-            .single();
+          const { data: profile } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
           set({ user: session.user, profile });
         } else {
           set({ user: null, profile: null });
@@ -76,113 +65,43 @@ export const useStore = create((set, get) => ({
   signup: async ({ email, password, username, displayName, avatarEmoji, dateOfBirth }) => {
     const supabase = getSupabase();
     if (!supabase) return { error: { message: 'Client not ready' } };
-
     const dob = new Date(dateOfBirth);
     const age = Math.floor((Date.now() - dob.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
-    if (age < 15) {
-      return { error: { message: 'You must be at least 15 years old to join MidasHub.' } };
-    }
-
-    const { data: existing } = await supabase
-      .from('profiles')
-      .select('id')
-      .eq('username', username.toLowerCase())
-      .single();
-    if (existing) {
-      return { error: { message: 'Username is already taken. Try another one!' } };
-    }
-
+    if (age < 15) return { error: { message: 'You must be at least 15 years old to join MidasHub.' } };
+    const { data: existing } = await supabase.from('profiles').select('id').eq('username', username.toLowerCase()).single();
+    if (existing) return { error: { message: 'Username already taken. Try another one!' } };
     const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
+      email, password,
       options: {
-        data: {
-          username: username.toLowerCase(),
-          display_name: displayName,
-          avatar_emoji: avatarEmoji || '😎',
-        },
+        data: { username: username.toLowerCase(), display_name: displayName, avatar_emoji: avatarEmoji || '😎' },
         emailRedirectTo: `${window.location.origin}/auth/callback`,
       },
     });
-
     if (error) return { error };
     return { data, needsVerification: true };
   },
 
-  // Login with email or username
-  login: async ({ identifier, password }) => {
+  login: async ({ email, password }) => {
     const supabase = getSupabase();
     if (!supabase) return { error: { message: 'Client not ready' } };
-
-    let email = identifier;
-
-    // If identifier is not email, look up by username
-    if (!identifier.includes('@')) {
-      const { data: prof, error: lookupErr } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('username', identifier.toLowerCase())
-        .single();
-
-      if (!prof || lookupErr) {
-        return { error: { message: 'Username not found. Check spelling or use your email.' } };
-      }
-
-      // Get email from auth admin — use a workaround: try common pattern
-      // Since we can't look up email from profile, ask user to use email
-      // Actually we need to store email or use a different approach
-      // Best approach: try signing in with identifier as email first, if fails try username
-      const { data: directLogin, error: directErr } = await supabase.auth.signInWithPassword({
-        email: identifier,
-        password,
-      });
-
-      if (!directErr && directLogin?.user) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', directLogin.user.id)
-          .single();
-        set({ user: directLogin.user, profile, showAuth: false });
-        return { data: directLogin };
-      }
-
-      return { error: { message: 'Could not log in with username. Please use your email address.' } };
-    }
-
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) return { error };
-
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', data.user.id)
-      .single();
+    const { data: profile } = await supabase.from('profiles').select('*').eq('id', data.user.id).single();
     set({ user: data.user, profile, showAuth: false });
     return { data };
   },
 
   logout: async () => {
     const supabase = getSupabase();
-    if (supabase) {
-      await supabase.auth.signOut();
-    }
-    set({ user: null, profile: null, showAuth: false, showCompose: false });
-    if (typeof window !== 'undefined') {
-      window.location.href = '/';
-    }
+    if (supabase) await supabase.auth.signOut();
+    set({ user: null, profile: null });
   },
 
   updateProfile: async (updates) => {
     const supabase = getSupabase();
     const { user } = get();
     if (!user || !supabase) return;
-    const { data, error } = await supabase
-      .from('profiles')
-      .update({ ...updates, updated_at: new Date().toISOString() })
-      .eq('id', user.id)
-      .select()
-      .single();
+    const { data, error } = await supabase.from('profiles').update({ ...updates, updated_at: new Date().toISOString() }).eq('id', user.id).select().single();
     if (!error && data) set({ profile: data });
     return { data, error };
   },
@@ -194,12 +113,7 @@ export const useStore = create((set, get) => ({
     const supabase = getSupabase();
     const { user } = get();
     if (!user || !supabase) return;
-    const { data } = await supabase
-      .from('notifications')
-      .select('*, from_user:profiles!notifications_from_user_id_fkey(*)')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false })
-      .limit(50);
+    const { data } = await supabase.from('notifications').select('*, from_user:profiles!notifications_from_user_id_fkey(*)').eq('user_id', user.id).order('created_at', { ascending: false }).limit(50);
     const unread = (data || []).filter((n) => !n.is_read).length;
     set({ notifications: data || [], unreadCount: unread });
   },
@@ -208,14 +122,7 @@ export const useStore = create((set, get) => ({
     const supabase = getSupabase();
     const { user } = get();
     if (!user || !supabase) return;
-    await supabase
-      .from('notifications')
-      .update({ is_read: true })
-      .eq('user_id', user.id)
-      .eq('is_read', false);
-    set((s) => ({
-      notifications: s.notifications.map((n) => ({ ...n, is_read: true })),
-      unreadCount: 0,
-    }));
+    await supabase.from('notifications').update({ is_read: true }).eq('user_id', user.id).eq('is_read', false);
+    set((s) => ({ notifications: s.notifications.map((n) => ({ ...n, is_read: true })), unreadCount: 0 }));
   },
 }));
