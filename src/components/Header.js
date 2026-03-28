@@ -132,23 +132,67 @@ export default function Header() {
               </button>
               {showNotif && (
                 <div className="absolute top-11 right-0 w-72 sm:w-80 glass rounded-xl p-1.5 shadow-2xl animate-slide-up">
-                  <div className="px-3 py-2 text-sm font-bold border-b border-white/5 mb-1">Notifications</div>
+                  <div className="px-3 py-2 text-sm font-bold border-b border-white/5 mb-1 flex items-center justify-between">
+                    <span>Notifications</span>
+                    {notifications.length > 0 && <span className="text-[10px] text-white/20 font-normal">{notifications.length}</span>}
+                  </div>
                   {notifications.length === 0 ? (
-                    <div className="p-6 text-center text-white/20 text-sm">Nothing here yet</div>
-                  ) : notifications.slice(0, 8).map((n) => (
-                    <div key={n.id} className={`p-2.5 rounded-lg text-sm transition cursor-pointer ${!n.is_read ? 'bg-white/3' : 'hover:bg-white/3'}`}>
-                      <div className="flex items-start gap-2">
-                        {n.from_user && <span className="text-lg shrink-0">{n.from_user.avatar_emoji || '😎'}</span>}
-                        <div className="min-w-0">
-                          <span className="text-[13px] leading-snug">
-                            <strong>{n.from_user?.display_name || 'Someone'}</strong>{' '}
-                            {n.type === 'like' ? 'liked your post' : n.type === 'comment' ? 'commented' : n.type === 'friend_request' ? 'wants to be friends' : n.type === 'friend_accepted' ? 'accepted your request' : n.type === 'viral' ? '🔥 Your post went viral!' : n.content || ''}
-                          </span>
-                          <div className="text-[10px] text-white/20 mt-0.5">{timeAgo(n.created_at)}</div>
+                    <div className="p-8 text-center text-white/20 text-sm">
+                      <div className="text-2xl mb-2">🔔</div>
+                      No notifications yet
+                    </div>
+                  ) : notifications.slice(0, 10).map((n) => {
+                    const icon = n.type === 'like' ? '❤️' : n.type === 'comment' ? '💬' : n.type === 'friend_request' ? '👋' : n.type === 'friend_accepted' ? '🤝' : n.type === 'repost' ? '🔄' : n.type === 'mention' ? '📢' : n.type === 'viral' ? '🔥' : '🔔';
+                    const message = n.content || (
+                      n.type === 'like' ? 'liked your post' :
+                      n.type === 'comment' ? 'commented on your post' :
+                      n.type === 'friend_request' ? 'sent you a friend request' :
+                      n.type === 'friend_accepted' ? 'accepted your friend request' :
+                      n.type === 'repost' ? 'reposted your post' :
+                      n.type === 'mention' ? 'mentioned you' :
+                      n.type === 'viral' ? 'Your post is going viral!' :
+                      'sent you a notification'
+                    );
+                    return (
+                      <div key={n.id} className={`p-2.5 rounded-lg text-sm transition ${!n.is_read ? 'bg-[var(--accent)]/5 border-l-2 border-[var(--accent)]' : 'hover:bg-white/3'}`}>
+                        <div className="flex items-start gap-2.5">
+                          <div className="relative shrink-0">
+                            {n.from_user && <span className="text-lg">{n.from_user.avatar_emoji || '😎'}</span>}
+                            <span className="absolute -bottom-0.5 -right-0.5 text-[10px]">{icon}</span>
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-[13px] leading-snug">
+                              <Link href={`/profile/${n.from_user?.username || ''}`} className="font-bold hover:underline" onClick={() => setShowNotif(false)}>
+                                {n.from_user?.display_name || 'Someone'}
+                              </Link>{' '}
+                              <span className="text-white/60">{message}</span>
+                            </p>
+                            <div className="text-[10px] text-white/20 mt-0.5">{timeAgo(n.created_at)}</div>
+                            {n.type === 'friend_request' && (
+                              <div className="flex gap-1.5 mt-1.5">
+                                <button onClick={async () => {
+                                  const supabase = createClient();
+                                  try {
+                                    await supabase.from('friendships').update({ status: 'accepted' }).or(`and(requester_id.eq.${n.from_user_id},addressee_id.eq.${user.id})`);
+                                    await supabase.from('notifications').insert({ user_id: n.from_user_id, from_user_id: user.id, type: 'friend_accepted', content: `${profile?.display_name} accepted your friend request` });
+                                    fetchNotifications();
+                                    useStore.getState().showToast('Friend request accepted ✓');
+                                  } catch (e) {}
+                                }} className="btn-primary py-1 px-3 text-[10px]">Accept</button>
+                                <button onClick={async () => {
+                                  const supabase = createClient();
+                                  try {
+                                    await supabase.from('friendships').delete().or(`and(requester_id.eq.${n.from_user_id},addressee_id.eq.${user.id})`);
+                                    fetchNotifications();
+                                  } catch (e) {}
+                                }} className="btn-secondary py-1 px-3 text-[10px]">Decline</button>
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>

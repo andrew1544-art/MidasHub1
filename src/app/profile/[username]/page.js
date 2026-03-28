@@ -162,7 +162,7 @@ export default function ProfilePage() {
           {(tab === 'viral' ? posts.filter(p => p.is_viral) : posts).length === 0 ? (
             <div className="text-center py-16 text-white/20 text-sm">{tab === 'viral' ? 'No viral posts yet' : 'No posts yet'}</div>
           ) : (
-            (tab === 'viral' ? posts.filter(p => p.is_viral) : posts).map(post => <PostCard key={post.id} post={post}/>)
+            (tab === 'viral' ? posts.filter(p => p.is_viral) : posts).map(post => <PostCard key={post.id} post={post} onPostUpdated={fetchProfile}/>)
           )}
         </div>
       </div>

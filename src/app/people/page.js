@@ -56,7 +56,7 @@ export default function PeoplePage() {
     const supabase = createClient();
     await supabase.from('friendships').insert({ requester_id: user.id, addressee_id: id });
     setPendingIds(prev => new Set([...prev, id]));
-    await supabase.from('notifications').insert({ user_id: id, from_user_id: user.id, type: 'friend_request' });
+    await supabase.from('notifications').insert({ user_id: id, from_user_id: user.id, type: 'friend_request', content: `sent you a friend request` });
     showToast('Friend request sent ✓');
   };
 
@@ -64,7 +64,7 @@ export default function PeoplePage() {
     const supabase = createClient();
     await supabase.from('friendships').update({ status: 'accepted' }).eq('id', shipId);
     setRequests(prev => prev.filter(r => r.id !== shipId));
-    await supabase.from('notifications').insert({ user_id: requesterId, from_user_id: user.id, type: 'friend_accepted' });
+    await supabase.from('notifications').insert({ user_id: requesterId, from_user_id: user.id, type: 'friend_accepted', content: `accepted your friend request` });
     showToast('Friend request accepted ✓');
   };
 

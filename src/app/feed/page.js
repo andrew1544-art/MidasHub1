@@ -25,13 +25,15 @@ export default function FeedPage() {
       if (user) {
         const postIds = data.map((p) => p.id);
         if (postIds.length) {
-          const [lr, br] = await Promise.all([
+          const [lr, br, rr] = await Promise.all([
             supabase.from('likes').select('post_id').eq('user_id', user.id).in('post_id', postIds),
             supabase.from('bookmarks').select('post_id').eq('user_id', user.id).in('post_id', postIds),
+            supabase.from('reposts').select('post_id').eq('user_id', user.id).in('post_id', postIds),
           ]);
           const liked = new Set((lr.data || []).map((l) => l.post_id));
           const bookmarked = new Set((br.data || []).map((b) => b.post_id));
-          data.forEach((p) => { p.user_liked = liked.has(p.id); p.user_bookmarked = bookmarked.has(p.id); });
+          const reposted = new Set((rr.data || []).map((r) => r.post_id));
+          data.forEach((p) => { p.user_liked = liked.has(p.id); p.user_bookmarked = bookmarked.has(p.id); p.user_reposted = reposted.has(p.id); });
         }
       }
       append ? setPosts((prev) => [...prev, ...data]) : setPosts(data);
@@ -140,7 +142,7 @@ export default function FeedPage() {
           </div>
         ) : (
           <div className="space-y-3">
-            {posts.map((post) => <PostCard key={post.id} post={post} />)}
+            {posts.map((post) => <PostCard key={post.id} post={post} onPostUpdated={() => { setPage(0); fetchPosts(0); }} />)}
             {loadingMore && (
               <div className="flex items-center justify-center gap-2 py-6 text-white/25 text-sm">
                 <span className="animate-spin">⏳</span> Loading more posts...

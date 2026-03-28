@@ -122,10 +122,10 @@ export default function ComposeModal() {
         )}
 
         <div className="mb-3">
-          <div className="text-xs text-white/25 mb-2">Reposting from:</div>
+          <div className="text-xs text-white/40 mb-2">📡 Where is this from?</div>
           <div className="flex flex-wrap gap-1.5">
             <button onClick={() => setSourcePlatform('midashub')}
-              className={`platform-pill ${sourcePlatform === 'midashub' ? 'accent-gradient text-black' : 'bg-white/5 text-white/40'}`}>⚡ Original</button>
+              className={`platform-pill ${sourcePlatform === 'midashub' ? 'accent-gradient text-black' : 'bg-white/5 text-white/40'}`}>⚡ My Original Post</button>
             {PLATFORM_LIST.map(([key, p]) => (
               <button key={key} onClick={() => setSourcePlatform(key)}
                 className="platform-pill"
@@ -140,12 +140,12 @@ export default function ComposeModal() {
           <input value={sourceUrl} onChange={(e) => setSourceUrl(e.target.value)} placeholder="Paste original post URL (optional)" className="input-field mb-3 text-sm py-2" />
         )}
 
-        <input value={tags} onChange={(e) => setTags(e.target.value)} placeholder="Tags: funny, viral, memes" className="input-field mb-3 text-sm py-2" />
+        <input value={tags} onChange={(e) => setTags(e.target.value)} placeholder="Add tags (comma separated): funny, viral, trending" className="input-field mb-3 text-sm py-2" />
 
         <div className="flex items-center gap-2 mb-4">
           <input type="file" ref={fileRef} multiple accept="image/*,video/*" className="hidden" onChange={handleMedia} />
-          <button onClick={() => fileRef.current?.click()} className="w-9 h-9 rounded-lg bg-white/5 hover:bg-white/10 transition text-base flex items-center justify-center" title="Media">🖼️</button>
-          <button onClick={() => setShowCrossPost(!showCrossPost)} className="w-9 h-9 rounded-lg bg-white/5 hover:bg-white/10 transition text-base flex items-center justify-center" title="Cross-post">🌐</button>
+          <button onClick={() => fileRef.current?.click()} className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 transition text-sm text-white/50" title="Add photos or videos">🖼️ <span className="hidden sm:inline">Add Media</span></button>
+          <button onClick={() => setShowCrossPost(!showCrossPost)} className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 transition text-sm text-white/50" title="Post to other platforms too">🌐 <span className="hidden sm:inline">Cross-Post</span></button>
         </div>
 
         {showCrossPost && (
