@@ -1,5 +1,5 @@
 'use client';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useStore } from '@/lib/store';
 import Header from '@/components/Header';
 import AuthModal from '@/components/AuthModal';
@@ -7,15 +7,18 @@ import ComposeModal from '@/components/ComposeModal';
 
 export default function AppShell({ children }) {
   const { initAuth, loading, theme, loadTheme, toast } = useStore();
+  const initialized = useRef(false);
 
   useEffect(() => {
+    // Prevent double-init in React strict mode
+    if (initialized.current) return;
+    initialized.current = true;
     initAuth();
     loadTheme();
   }, []);
 
-  // Apply theme to html
   useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme);
+    if (theme) document.documentElement.setAttribute('data-theme', theme);
   }, [theme]);
 
   if (loading) {

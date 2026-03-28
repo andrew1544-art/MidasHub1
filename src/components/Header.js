@@ -24,8 +24,10 @@ export default function Header() {
   useEffect(() => {
     if (!user) return;
     const supabase = createClient();
-    const channel = supabase.channel('notifs')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` }, () => fetchNotifications())
+    const channel = supabase.channel('notifs-' + user.id)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` }, () => {
+        try { fetchNotifications(); } catch (e) {}
+      })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [user]);

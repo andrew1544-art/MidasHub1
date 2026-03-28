@@ -50,9 +50,11 @@ export default function FeedPage() {
 
   useEffect(() => {
     const supabase = createClient();
-    const ch = supabase.channel('feed').on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'posts' }, async (p) => {
-      const { data } = await supabase.from('posts').select('*, profiles(*)').eq('id', p.new.id).single();
-      if (data) setPosts((prev) => [data, ...prev]);
+    const ch = supabase.channel('feed-live-' + Date.now()).on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'posts' }, async (p) => {
+      try {
+        const { data } = await supabase.from('posts').select('*, profiles(*)').eq('id', p.new.id).maybeSingle();
+        if (data) setPosts((prev) => [data, ...prev]);
+      } catch (e) {}
     }).subscribe();
     return () => { supabase.removeChannel(ch); };
   }, []);

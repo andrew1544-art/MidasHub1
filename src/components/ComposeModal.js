@@ -13,6 +13,7 @@ export default function ComposeModal() {
   const [mediaFiles, setMediaFiles] = useState([]);
   const [mediaPreviews, setMediaPreviews] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const [showCrossPost, setShowCrossPost] = useState(false);
   const fileRef = useRef(null);
 
@@ -21,43 +22,78 @@ export default function ComposeModal() {
   const handleMedia = (e) => {
     const files = Array.from(e.target.files).slice(0, 4);
     setMediaFiles(files);
-    setMediaPreviews(files.map((f) => URL.createObjectURL(f)));
+    setMediaPreviews(files.map(f => URL.createObjectURL(f)));
   };
 
   const handlePost = async () => {
-    if (!content.trim()) return;
+    if (!content.trim() || loading) return;
     setLoading(true);
-    const supabase = createClient();
-    let mediaUrls = [];
-    for (const file of mediaFiles) {
-      const ext = file.name.split('.').pop();
-      const path = `${user.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-      const { data } = await supabase.storage.from('media').upload(path, file);
-      if (data) {
-        const { data: urlData } = supabase.storage.from('media').getPublicUrl(data.path);
-        mediaUrls.push(urlData.publicUrl);
+    setError('');
+
+    try {
+      const supabase = createClient();
+      let mediaUrls = [];
+
+      // Upload media (skip if none)
+      for (const file of mediaFiles) {
+        try {
+          const ext = file.name.split('.').pop();
+          const path = `${user.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+          const { data, error: uploadErr } = await supabase.storage.from('media').upload(path, file);
+          if (data && !uploadErr) {
+            const { data: urlData } = supabase.storage.from('media').getPublicUrl(data.path);
+            mediaUrls.push(urlData.publicUrl);
+          }
+        } catch (uploadErr) {
+          console.warn('Media upload failed:', uploadErr);
+          // Continue without media — don't block the post
+        }
       }
+
+      const parsedTags = tags.split(',').map(t => t.trim().replace('#', '').toLowerCase()).filter(Boolean);
+
+      const { error: postErr } = await supabase.from('posts').insert({
+        user_id: user.id,
+        content: content.trim(),
+        source_platform: sourcePlatform,
+        source_url: sourceUrl.trim() || null,
+        media_urls: mediaUrls,
+        media_type: mediaUrls.length > 0 ? 'image' : null,
+        tags: parsedTags,
+      });
+
+      if (postErr) {
+        console.error('Post error:', postErr);
+        setError('Failed to post: ' + (postErr.message || 'Unknown error'));
+        setLoading(false);
+        return;
+      }
+
+      // Success — reset and close
+      setContent('');
+      setSourcePlatform('midashub');
+      setSourceUrl('');
+      setTags('');
+      setMediaFiles([]);
+      setMediaPreviews([]);
+      setShowCompose(false);
+      showToast('Posted! ⚡');
+      window.dispatchEvent(new Event('midashub:newpost'));
+    } catch (err) {
+      console.error('Post exception:', err);
+      setError('Something went wrong. Check your connection and try again.');
     }
-    const parsedTags = tags.split(',').map((t) => t.trim().replace('#', '').toLowerCase()).filter(Boolean);
-    await supabase.from('posts').insert({
-      user_id: user.id, content: content.trim(), source_platform: sourcePlatform,
-      source_url: sourceUrl.trim() || null, media_urls: mediaUrls,
-      media_type: mediaUrls.length > 0 ? 'image' : null, tags: parsedTags,
-    });
-    setContent(''); setSourcePlatform('midashub'); setSourceUrl(''); setTags('');
-    setMediaFiles([]); setMediaPreviews([]); setShowCompose(false);
-    showToast('Posted! ⚡');
-    window.dispatchEvent(new Event('midashub:newpost'));
+
     setLoading(false);
   };
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[999] flex items-center justify-center p-3 sm:p-4 animate-fade-in"
-      onClick={(e) => e.target === e.currentTarget && setShowCompose(false)}>
-      <div className="w-full max-w-lg glass rounded-2xl sm:rounded-3xl p-5 sm:p-6 animate-slide-up max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[999] flex items-center justify-center p-3 sm:p-4"
+      onClick={(e) => e.target === e.currentTarget && !loading && setShowCompose(false)}>
+      <div className="w-full max-w-lg glass rounded-2xl sm:rounded-3xl p-5 sm:p-6 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-bold">Create Post ⚡</h3>
-          <button onClick={() => setShowCompose(false)} className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-white/40 hover:text-white text-sm transition">✕</button>
+          <button onClick={() => !loading && setShowCompose(false)} className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-white/40 hover:text-white text-sm transition">✕</button>
         </div>
 
         <div className="flex items-center gap-2.5 mb-3">
@@ -113,7 +149,7 @@ export default function ComposeModal() {
         </div>
 
         {showCrossPost && (
-          <div className="mb-4 p-3 rounded-xl bg-white/3 border border-white/5 animate-slide-up">
+          <div className="mb-4 p-3 rounded-xl bg-white/3 border border-white/5">
             <div className="text-xs text-white/30 mb-2">📡 Also post on (opens in new tab):</div>
             <div className="grid grid-cols-2 gap-1.5">
               {PLATFORM_LIST.map(([key, p]) => (
@@ -127,8 +163,14 @@ export default function ComposeModal() {
           </div>
         )}
 
-        <button onClick={handlePost} disabled={!content.trim() || loading} className="btn-primary w-full py-3 flex items-center justify-center gap-2">
-          {loading ? <span className="animate-spin">⏳</span> : 'Post to MidasHub 🚀'}
+        {error && <div className="mb-3 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm">{error}</div>}
+
+        <button onClick={handlePost} disabled={!content.trim() || loading} className="btn-primary w-full py-3 flex items-center justify-center gap-2 disabled:opacity-40">
+          {loading ? (
+            <><span className="animate-spin">⏳</span> Posting...</>
+          ) : (
+            'Post to MidasHub 🚀'
+          )}
         </button>
       </div>
     </div>
