@@ -3,6 +3,7 @@ import { Suspense, useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import AppShell from '@/components/AppShell';
+import { StartTradeButton, TradeCard } from '@/components/TradeBox';
 import { useStore } from '@/lib/store';
 import { createClient } from '@/lib/supabase-browser';
 import { timeAgo } from '@/lib/constants';
@@ -17,15 +18,13 @@ function ChatInner() {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [otherUser, setOtherUser] = useState(null);
+  const [trades, setTrades] = useState([]);
+  const [showTrades, setShowTrades] = useState(false);
   const endRef = useRef(null);
   const supabase = createClient();
 
   useEffect(() => { if (!user) { setLoading(false); return; } loadConvos(); }, [user]);
-
-  useEffect(() => {
-    const target = searchParams.get('user');
-    if (target && user) startChat(target);
-  }, [searchParams, user]);
+  useEffect(() => { const t = searchParams.get('user'); if (t && user) startChat(t); }, [searchParams, user]);
 
   const loadConvos = async () => {
     const { data: memberships } = await supabase.from('conversation_members').select('conversation_id').eq('user_id', user.id);
@@ -33,11 +32,13 @@ function ChatInner() {
     const list = [];
     for (const m of memberships) {
       const { data: members } = await supabase.from('conversation_members').select('*, profiles(*)').eq('conversation_id', m.conversation_id);
-      const { data: last } = await supabase.from('messages').select('*').eq('conversation_id', m.conversation_id).order('created_at', { ascending: false }).limit(1).single();
+      const { data: last } = await supabase.from('messages').select('*').eq('conversation_id', m.conversation_id).order('created_at', { ascending: false }).limit(1).maybeSingle();
       const other = (members || []).find(x => x.user_id !== user.id);
       const me = (members || []).find(x => x.user_id === user.id);
       const { count } = await supabase.from('messages').select('*', { count: 'exact', head: true }).eq('conversation_id', m.conversation_id).neq('sender_id', user.id).gt('created_at', me?.last_read_at || '1970-01-01');
-      list.push({ id: m.conversation_id, otherUser: other?.profiles, lastMessage: last, unread: count || 0 });
+      // Check active trades
+      const { count: tradeCount } = await supabase.from('trades').select('*', { count: 'exact', head: true }).eq('conversation_id', m.conversation_id).not('status', 'in', '("completed","cancelled","resolved")');
+      list.push({ id: m.conversation_id, otherUser: other?.profiles, lastMessage: last, unread: count || 0, activeTrades: tradeCount || 0 });
     }
     list.sort((a, b) => (b.lastMessage?.created_at || '0').localeCompare(a.lastMessage?.created_at || '0'));
     setConvos(list); setLoading(false);
@@ -62,7 +63,7 @@ function ChatInner() {
   const openConvo = async (convoId, targetId = null) => {
     setActiveConvo(convoId);
     if (targetId) {
-      const { data } = await supabase.from('profiles').select('*').eq('id', targetId).single();
+      const { data } = await supabase.from('profiles').select('*').eq('id', targetId).maybeSingle();
       setOtherUser(data);
     } else {
       setOtherUser(convos.find(c => c.id === convoId)?.otherUser);
@@ -70,7 +71,19 @@ function ChatInner() {
     const { data: msgs } = await supabase.from('messages').select('*, profiles(*)').eq('conversation_id', convoId).order('created_at', { ascending: true });
     setMessages(msgs || []);
     await supabase.from('conversation_members').update({ last_read_at: new Date().toISOString() }).match({ conversation_id: convoId, user_id: user.id });
+
+    // Load trades for this conversation
+    const { data: tradeData } = await supabase.from('trades').select('*').eq('conversation_id', convoId).order('created_at', { ascending: false });
+    setTrades(tradeData || []);
+    if ((tradeData || []).some(t => !['completed','cancelled','resolved'].includes(t.status))) setShowTrades(true);
+
     setTimeout(() => endRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+  };
+
+  const loadTrades = async () => {
+    if (!activeConvo) return;
+    const { data } = await supabase.from('trades').select('*').eq('conversation_id', activeConvo).order('created_at', { ascending: false });
+    setTrades(data || []);
   };
 
   useEffect(() => {
@@ -117,13 +130,10 @@ function ChatInner() {
               </div>
               <div className="flex-1 overflow-y-auto">
                 {loading ? (
-                  <div className="p-4 space-y-3">
-                    {[1,2,3].map(i => <div key={i} className="flex gap-3 p-3"><div className="w-10 h-10 rounded-full skeleton"/><div className="flex-1 space-y-2"><div className="h-4 w-24 skeleton"/><div className="h-3 w-36 skeleton"/></div></div>)}
-                  </div>
+                  <div className="p-4 space-y-3">{[1,2,3].map(i => <div key={i} className="flex gap-3 p-3"><div className="w-10 h-10 rounded-full skeleton"/><div className="flex-1 space-y-2"><div className="h-4 w-24 skeleton"/><div className="h-3 w-36 skeleton"/></div></div>)}</div>
                 ) : convos.length === 0 ? (
                   <div className="p-8 text-center text-white/20 text-sm">
-                    <div className="text-4xl mb-3">🗨️</div>
-                    No conversations yet<br/><Link href="/people" className="text-[var(--accent)] hover:underline mt-2 inline-block">Find people to chat with →</Link>
+                    <div className="text-4xl mb-3">🗨️</div>No conversations yet<br/><Link href="/people" className="text-[var(--accent)] hover:underline mt-2 inline-block">Find people →</Link>
                   </div>
                 ) : convos.map(c => (
                   <button key={c.id} onClick={() => openConvo(c.id)}
@@ -134,7 +144,10 @@ function ChatInner() {
                         <span className="font-semibold text-sm truncate">{c.otherUser?.display_name || 'User'}</span>
                         <span className="text-[10px] text-white/20 shrink-0">{c.lastMessage ? timeAgo(c.lastMessage.created_at) : ''}</span>
                       </div>
-                      <div className="text-xs text-white/30 truncate mt-0.5">{c.lastMessage?.content || 'Start chatting!'}</div>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="text-xs text-white/30 truncate flex-1">{c.lastMessage?.content || 'Start chatting!'}</span>
+                        {c.activeTrades > 0 && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-green-500/15 text-green-400 font-bold shrink-0">🔒 Trade</span>}
+                      </div>
                     </div>
                     {c.unread > 0 && <span className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0" style={{ background: 'var(--accent)', color: '#000' }}>{c.unread}</span>}
                   </button>
@@ -146,51 +159,72 @@ function ChatInner() {
             <div className={`flex-1 flex flex-col ${!activeConvo ? 'hidden md:flex' : 'flex'}`}>
               {!activeConvo ? (
                 <div className="flex-1 flex items-center justify-center text-white/15 text-sm">
-                  <div className="text-center">
-                    <div className="text-5xl mb-3">💬</div>
-                    <p>Select a conversation</p>
-                  </div>
+                  <div className="text-center"><div className="text-5xl mb-3">💬</div><p>Select a conversation</p></div>
                 </div>
               ) : (
                 <>
-                  <div className="flex items-center gap-3 p-4 border-b border-white/5">
+                  {/* Chat header with trade button */}
+                  <div className="flex items-center gap-3 p-3 border-b border-white/5">
                     <button onClick={() => setActiveConvo(null)} className="md:hidden text-white/40 text-lg">←</button>
-                    <Link href={`/profile/${otherUser?.username}`} className="flex items-center gap-3 hover:opacity-80 transition">
+                    <Link href={`/profile/${otherUser?.username}`} className="flex items-center gap-3 hover:opacity-80 transition flex-1 min-w-0">
                       <span className="text-2xl">{otherUser?.avatar_emoji || '😎'}</span>
-                      <div>
-                        <div className="font-bold text-sm">{otherUser?.display_name}</div>
+                      <div className="min-w-0">
+                        <div className="font-bold text-sm truncate">{otherUser?.display_name}</div>
                         <div className="text-[11px] text-green-400">● Online</div>
                       </div>
                     </Link>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {trades.length > 0 && (
+                        <button onClick={() => setShowTrades(!showTrades)}
+                          className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition ${showTrades ? 'bg-green-500/15 text-green-400' : 'bg-white/5 text-white/40'}`}>
+                          🔒 {trades.filter(t => !['completed','cancelled','resolved'].includes(t.status)).length || ''} Trades
+                        </button>
+                      )}
+                      <StartTradeButton conversationId={activeConvo} otherUserId={otherUser?.id} onTradeCreated={loadTrades} />
+                    </div>
                   </div>
 
-                  <div className="flex-1 overflow-y-auto p-4 space-y-2">
-                    {messages.length === 0 && (
-                      <div className="text-center text-white/15 text-sm py-10">
-                        Say hi to {otherUser?.display_name?.split(' ')[0]}! 👋
+                  {/* Active trades panel — slides in from top */}
+                  {showTrades && trades.length > 0 && (
+                    <div className="border-b border-white/5 p-3 space-y-2 max-h-[50vh] overflow-y-auto overscroll-contain" style={{ WebkitOverflowScrolling: 'touch' }}>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-bold text-white/40">🔒 TRADES</span>
+                        <button onClick={() => setShowTrades(false)} className="text-[10px] text-white/25">Hide</button>
                       </div>
+                      {trades.map(t => <TradeCard key={t.id} trade={t} onUpdate={loadTrades} />)}
+                    </div>
+                  )}
+
+                  {/* Messages */}
+                  <div className="flex-1 overflow-y-auto p-4 space-y-2 overscroll-contain" style={{ WebkitOverflowScrolling: 'touch' }}>
+                    {/* Escrow warning at top */}
+                    <div className="text-center mb-3">
+                      <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-yellow-500/8 border border-yellow-500/15 text-[10px] text-yellow-300/60">
+                        🔒 If trading goods or services, use the <strong className="text-yellow-300/80">Start Trade</strong> button for escrow protection
+                      </div>
+                    </div>
+
+                    {messages.length === 0 && (
+                      <div className="text-center text-white/15 text-sm py-10">Say hi to {otherUser?.display_name?.split(' ')[0]}! 👋</div>
                     )}
                     {messages.map(msg => (
                       <div key={msg.id} className={`flex ${msg.sender_id === user.id ? 'justify-end' : 'justify-start'}`}>
                         <div className={`max-w-[75%] px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${
-                          msg.sender_id === user.id
-                            ? 'accent-gradient text-black rounded-br-md'
-                            : 'bg-white/8 text-white/90 rounded-bl-md'
+                          msg.sender_id === user.id ? 'accent-gradient text-black rounded-br-md' : 'bg-white/8 text-white/90 rounded-bl-md'
                         }`}>
                           {msg.content}
-                          <div className={`text-[10px] mt-1 ${msg.sender_id === user.id ? 'text-black/40' : 'text-white/20'}`}>
-                            {timeAgo(msg.created_at)}
-                          </div>
+                          <div className={`text-[10px] mt-1 ${msg.sender_id === user.id ? 'text-black/40' : 'text-white/20'}`}>{timeAgo(msg.created_at)}</div>
                         </div>
                       </div>
                     ))}
                     <div ref={endRef}/>
                   </div>
 
-                  <div className="p-4 border-t border-white/5 flex gap-3">
+                  {/* Input */}
+                  <div className="p-3 border-t border-white/5 flex gap-2">
                     <input value={text} onChange={e => setText(e.target.value)}
                       onKeyDown={e => e.key === 'Enter' && !e.shiftKey && send()}
-                      placeholder="Type a message..." className="input-field flex-1 py-3"/>
+                      placeholder="Type a message..." className="input-field flex-1 py-3" style={{ fontSize: '16px' }} />
                     <button onClick={send} disabled={!text.trim() || sending} className="btn-primary px-5 py-3 disabled:opacity-30">
                       {sending ? '⏳' : '→'}
                     </button>
