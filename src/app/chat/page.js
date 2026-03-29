@@ -170,11 +170,19 @@ function ChatInner() {
     if (!activeConvo) return;
     const ch = sb.channel(`chat-${activeConvo}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `conversation_id=eq.${activeConvo}` }, async (p) => {
+        // Skip if we already have this exact message
         if (msgsRef.current.some(m => m.id === p.new.id)) return;
         try {
           const { data } = await sb.from('messages').select('*, profiles(id, display_name, avatar_emoji)').eq('id', p.new.id).maybeSingle();
           if (data) {
-            msgsRef.current = [...msgsRef.current, data];
+            // If this is our own message, remove the optimistic temp version
+            if (data.sender_id === user.id) {
+              msgsRef.current = msgsRef.current.filter(m => !String(m.id).startsWith('temp-'));
+            }
+            // Don't add if already exists (race condition)
+            if (!msgsRef.current.some(m => m.id === data.id)) {
+              msgsRef.current = [...msgsRef.current, data];
+            }
             setMessages([...msgsRef.current]);
             if (data.sender_id !== user.id) playMessageSound();
             setTimeout(() => endRef.current?.scrollIntoView({ behavior: 'smooth' }), 30);

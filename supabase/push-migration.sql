@@ -9,13 +9,13 @@ CREATE TABLE IF NOT EXISTS public.push_subscriptions (
   updated_at TIMESTAMPTZ DEFAULT now()
 );
 
--- Index for fast lookup by user
 CREATE INDEX IF NOT EXISTS idx_push_subs_user ON public.push_subscriptions(user_id);
--- Unique constraint: one endpoint per user
-CREATE UNIQUE INDEX IF NOT EXISTS idx_push_subs_unique ON public.push_subscriptions(user_id, endpoint);
 
--- RLS
+-- RLS — users can manage their own, service role bypasses automatically
 ALTER TABLE public.push_subscriptions ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users manage own push subs" ON public.push_subscriptions;
 CREATE POLICY "Users manage own push subs" ON public.push_subscriptions FOR ALL USING (auth.uid() = user_id);
--- Service role can read all (for sending)
-CREATE POLICY "Service can read all push subs" ON public.push_subscriptions FOR SELECT USING (auth.role() = 'service_role');
+
+-- Allow authenticated users to insert their own subscriptions
+DROP POLICY IF EXISTS "Users insert own push subs" ON public.push_subscriptions;
+CREATE POLICY "Users insert own push subs" ON public.push_subscriptions FOR INSERT WITH CHECK (auth.uid() = user_id);

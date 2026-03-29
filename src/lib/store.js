@@ -7,17 +7,19 @@ function getSupabase() {
 }
 
 const VAPID_PUBLIC = 'BEUwvEX0AosCeqokhBC04Mjp17WryT_DEnG_aPwBWaqZ1ENQmQGRHADql_P40bVX3OeRAiyev8_3ww4eDQUb-_o';
+let pushRegistered = false;
 
 // Register for push notifications (non-blocking, silent)
 async function registerPush(userId) {
+  if (pushRegistered) return;
   try {
     if (typeof window === 'undefined' || !('serviceWorker' in navigator) || !('PushManager' in window)) return;
+    // Wait for SW to be ready
+    const reg = await navigator.serviceWorker.ready;
     // Ask permission
     const perm = await Notification.requestPermission();
     if (perm !== 'granted') return;
-    // Get SW registration
-    const reg = await navigator.serviceWorker.ready;
-    // Subscribe
+    // Subscribe or get existing subscription
     let sub = await reg.pushManager.getSubscription();
     if (!sub) {
       sub = await reg.pushManager.subscribe({
@@ -25,9 +27,9 @@ async function registerPush(userId) {
         applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC),
       });
     }
-    // Send to server
+    // Save to server
     const subJson = sub.toJSON();
-    await fetch('/api/push', {
+    const res = await fetch('/api/push', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -35,7 +37,8 @@ async function registerPush(userId) {
         subscription: { endpoint: sub.endpoint, keys: { p256dh: subJson.keys.p256dh, auth: subJson.keys.auth } },
       }),
     });
-  } catch(e) { /* Silent fail — push is optional */ }
+    if (res.ok) pushRegistered = true;
+  } catch(e) { /* Push is optional — silent fail */ }
 }
 
 function urlBase64ToUint8Array(base64String) {
