@@ -258,6 +258,7 @@ export default function PostCard({ post, onPostUpdated }) {
             <span className="platform-pill text-[10px] py-0.5" style={{ background: `${plat.color}18`, color: plat.color }}>{plat.icon} via {plat.name}</span>
             <span className="text-[11px] text-white/20">{timeAgo(post.created_at)}</span>
             {post.updated_at && post.updated_at !== post.created_at && <span className="text-[10px] text-white/15 italic">edited</span>}
+            {isOwner && <span className="text-[10px] text-white/15">{post.is_public === false ? '🔒' : '🌍'}</span>}
           </div>
         </div>
         <div className="relative" ref={optionsRef}>

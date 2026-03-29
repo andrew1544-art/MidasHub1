@@ -23,6 +23,8 @@ export default function FeedPage() {
       const supabase = createClient();
       let query = supabase.from('posts').select('*, profiles(*)').order('created_at', { ascending: false }).range(pageNum * PAGE_SIZE, (pageNum + 1) * PAGE_SIZE - 1);
       if (filter !== 'all') query = query.eq('source_platform', filter);
+      // Non-logged-in users only see public posts
+      if (!user) query = query.eq('is_public', true);
       const { data, error } = await query;
       if (error) { console.error('Feed error:', error); setLoading(false); setLoadingMore(false); loadingMoreRef.current = false; return; }
       if (data) {
@@ -94,7 +96,7 @@ export default function FeedPage() {
   return (
     <AppShell>
       <div className="max-w-2xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
-        {/* Compose bar */}
+        {/* Compose bar (logged in) */}
         {user && (
           <div className="glass-light rounded-2xl p-4 mb-5">
             <div className="flex items-center gap-3">
@@ -104,6 +106,19 @@ export default function FeedPage() {
                 What&apos;s on your mind? Share anything...
               </button>
               <button onClick={() => setShowCompose(true)} className="btn-primary py-2.5 px-5 text-xs shrink-0">✏️ Post</button>
+            </div>
+          </div>
+        )}
+
+        {/* Sign up banner (not logged in) */}
+        {!user && (
+          <div className="glass-light rounded-2xl p-5 mb-5 text-center">
+            <div className="text-3xl mb-2">⚡</div>
+            <h3 className="font-bold text-lg mb-1">Welcome to MidasHub</h3>
+            <p className="text-white/40 text-sm mb-4">You&apos;re viewing public posts. Sign up to see everything, post, chat, and trade!</p>
+            <div className="flex gap-2 justify-center">
+              <button onClick={() => setShowAuth(true, 'signup')} className="btn-primary px-6 py-2.5 text-sm">Join Free ⚡</button>
+              <button onClick={() => setShowAuth(true, 'login')} className="btn-secondary px-6 py-2.5 text-sm">Log In</button>
             </div>
           </div>
         )}

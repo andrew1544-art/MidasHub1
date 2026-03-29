@@ -16,6 +16,7 @@ export default function ComposeModal() {
   const [error, setError] = useState('');
   const [showCrossPost, setShowCrossPost] = useState(false);
   const [quote, setQuote] = useState(null);
+  const [isPublic, setIsPublic] = useState(true);
   const fileRef = useRef(null);
 
   // Pick up quote repost from PostCard
@@ -83,6 +84,7 @@ export default function ComposeModal() {
         user_id: user.id, content: finalContent, source_platform: sourcePlatform,
         source_url: sourceUrl.trim() || null, media_urls: mediaUrls,
         media_type: mediaUrls.length > 0 ? (hasVideo ? 'video' : 'image') : null, tags: parsedTags,
+        is_public: isPublic,
       });
       if (postErr) { setError('Failed to post: ' + (postErr.message || 'Unknown error')); setLoading(false); return; }
       setContent(''); setSourcePlatform('midashub'); setSourceUrl(''); setTags('');
@@ -189,6 +191,21 @@ export default function ComposeModal() {
             </div>
           </div>
         )}
+
+        {/* Public/Private toggle */}
+        <div className="flex items-center justify-between mb-3 p-3 rounded-xl bg-white/3 border border-white/5">
+          <div className="flex items-center gap-2">
+            <span className="text-lg">{isPublic ? '🌍' : '🔒'}</span>
+            <div>
+              <div className="text-sm font-semibold">{isPublic ? 'Public Post' : 'Private Post'}</div>
+              <div className="text-[10px] text-white/30">{isPublic ? 'Anyone can see this, even without an account' : 'Only logged-in MidasHub users can see this'}</div>
+            </div>
+          </div>
+          <button onClick={() => setIsPublic(!isPublic)}
+            className={`w-12 h-7 rounded-full transition-all relative ${isPublic ? 'bg-green-500' : 'bg-white/10'}`}>
+            <div className={`w-5 h-5 rounded-full bg-white absolute top-1 transition-all ${isPublic ? 'right-1' : 'left-1'}`} />
+          </button>
+        </div>
 
         {error && <div className="mb-3 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm">{error}</div>}
 

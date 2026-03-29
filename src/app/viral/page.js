@@ -16,7 +16,9 @@ export default function ViralPage() {
     try {
       const supabase = createClient();
       const col = sortBy === 'likes' ? 'likes_count' : sortBy === 'comments' ? 'comments_count' : 'reposts_count';
-      const { data } = await supabase.from('posts').select('*, profiles(*)').order(col, { ascending: false }).limit(50);
+      let query = supabase.from('posts').select('*, profiles(*)').order(col, { ascending: false }).limit(50);
+      if (!user) query = query.eq('is_public', true);
+      const { data } = await query;
       let results = data || [];
       if (user && results.length) {
         const ids = results.map(p => p.id);
