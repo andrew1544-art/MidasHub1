@@ -40,11 +40,26 @@ export default function RootLayout({ children }) {
       <body className="antialiased">
         {children}
         <script dangerouslySetInnerHTML={{ __html: `
+          // Clear all caches
           if ('caches' in window) { caches.keys().then(function(k) { k.forEach(function(c) { caches.delete(c); }); }); }
+          // Register/update SW
           if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('/sw.js').then(function(r) { r.update(); }).catch(function(){});
+            navigator.serviceWorker.register('/sw.js').then(function(r) {
+              r.update();
+              if (r.waiting) { r.waiting.postMessage({ type: 'SKIP_WAITING' }); }
+              r.addEventListener('updatefound', function() {
+                var nw = r.installing;
+                if (nw) nw.addEventListener('statechange', function() {
+                  if (nw.state === 'activated') window.location.reload();
+                });
+              });
+            }).catch(function(){});
+            // Listen for reload message from new SW
+            navigator.serviceWorker.addEventListener('message', function(e) {
+              if (e.data && e.data.type === 'RELOAD') window.location.reload();
+            });
           }
-          // Auto-reload after 3min+ in background (connections are dead)
+          // Auto-reload after 3min in background
           var _bg = 0;
           document.addEventListener('visibilitychange', function() {
             if (document.visibilityState === 'hidden') { _bg = Date.now(); }

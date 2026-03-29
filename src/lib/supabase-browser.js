@@ -15,8 +15,7 @@ export function createClient() {
     );
   }
 
-  // Simple — no custom auth config. Let Supabase handle everything.
-  // The middleware no longer calls getUser(), so no lock conflicts.
+  // Simple — no custom options. Let Supabase handle auth naturally.
   client = createBrowserClient(url, key);
   return client;
 }
