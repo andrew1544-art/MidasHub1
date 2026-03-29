@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import AppShell from '@/components/AppShell';
 import { RankBadge } from '@/components/RankBadge';
+import { InlineBadges } from '@/components/Badge';
 import { useStore } from '@/lib/store';
 import { createClient } from '@/lib/supabase-browser';
 import { sendNotification } from '@/lib/notifications';
@@ -94,7 +95,7 @@ export default function PeoplePage() {
         <div className="text-xs text-white/25 truncate mt-0.5">@{person.username}</div>
         <div className="flex justify-center gap-1.5 mt-1.5">
           <RankBadge xp={person.xp || 0} size="xs" />
-          {person.trade_count >= 2 && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-green-500/15 text-green-400 font-bold">✅</span>}
+          <InlineBadges profile={person} />
         </div>
       </Link>
       {person.bio && <div className="text-xs text-white/35 mt-2 line-clamp-2 leading-relaxed">{person.bio}</div>}

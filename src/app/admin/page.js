@@ -5,6 +5,7 @@ import AdminTradeChat from '@/components/AdminTradeChat';
 import { useStore } from '@/lib/store';
 import { createClient } from '@/lib/supabase-browser';
 import { timeAgo, formatCount } from '@/lib/constants';
+import { BADGE_TYPES, InlineBadges } from '@/components/Badge';
 
 // Admin access is controlled from the database (profiles.is_admin)
 // To add/remove admins, update the is_admin column in Supabase
@@ -260,34 +261,84 @@ export default function AdminPage() {
             {tab === 'users' && (
               <div className="space-y-2">
                 <div className="text-xs text-white/30 mb-2">{users.length} users</div>
-                {users.map(u => (
-                  <div key={u.id} className="glass-light rounded-xl p-4 flex items-center gap-3">
-                    <span className="text-2xl">{u.avatar_emoji || '😎'}</span>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2"><span className="font-bold text-sm truncate">{u.display_name}</span><span className="text-xs text-white/25">@{u.username}</span></div>
-                      <div className="flex items-center gap-2 mt-0.5 text-[10px] text-white/30">
-                        <span>{u.xp || 0} XP</span>
-                        <span>·</span>
-                        <span>KYC: {u.kyc_status || 'none'}</span>
-                        <span>·</span>
-                        <span>{u.trade_count || 0} trades</span>
-                        <span>·</span>
-                        <span>Joined {timeAgo(u.created_at)}</span>
+                {users.map(u => {
+                  const userBadges = (() => { try { const b = typeof u.badges === 'string' ? JSON.parse(u.badges) : u.badges; return Array.isArray(b) ? b : []; } catch(e) { return []; } })();
+                  return (
+                  <div key={u.id} className={`glass-light rounded-xl p-4 ${u.is_suspended ? 'border border-red-500/30 opacity-60' : ''}`}>
+                    <div className="flex items-center gap-3">
+                      <span className="text-2xl">{u.avatar_emoji || '😎'}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-bold text-sm truncate">{u.display_name}</span>
+                          <InlineBadges profile={u} />
+                          <span className="text-xs text-white/25">@{u.username}</span>
+                        </div>
+                        <div className="flex items-center gap-2 mt-0.5 text-[10px] text-white/30 flex-wrap">
+                          <span>{u.xp || 0} XP</span><span>·</span>
+                          <span>KYC: {u.kyc_status || 'none'}</span><span>·</span>
+                          <span>{u.trade_count || 0} trades</span><span>·</span>
+                          <span>{timeAgo(u.created_at)}</span>
+                          {u.is_suspended && <span className="text-red-400 font-bold">· ⛔ SUSPENDED</span>}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        {u.is_admin && <span className="text-[9px] px-2 py-1 rounded-full bg-purple-500/15 text-purple-400 font-bold">ADMIN</span>}
                       </div>
                     </div>
-                    <div className="flex gap-1.5 shrink-0">
-                      {u.is_admin && <span className="text-[9px] px-2 py-1 rounded-full bg-purple-500/15 text-purple-400 font-bold">ADMIN</span>}
-                      {u.kyc_status === 'pending' && <button onClick={() => verifyUser(u.id)} className="text-[10px] px-2.5 py-1.5 rounded-lg bg-green-500/15 text-green-400 font-semibold">✅ Verify</button>}
-                      {u.kyc_status !== 'verified' && <button onClick={() => verifyUser(u.id)} className="text-[10px] px-2.5 py-1.5 rounded-lg bg-white/5 text-white/30">Force Verify</button>}
+
+                    {/* Action buttons */}
+                    <div className="flex flex-wrap gap-1.5 mt-3 pt-3 border-t border-white/5">
+                      {/* Verification badge (blue tick) */}
+                      <button onClick={async () => { await supabase.from('profiles').update({ is_verified: !u.is_verified }).eq('id', u.id); loadAll(); }}
+                        className={`text-[10px] px-2.5 py-1.5 rounded-lg ${u.is_verified ? 'bg-blue-500/15 text-blue-400' : 'bg-white/5 text-white/30'}`}>
+                        {u.is_verified ? '✔ Verified' : '✔ Give Verified'}
+                      </button>
+
+                      {/* Custom badges */}
+                      {Object.entries(BADGE_TYPES).filter(([k]) => k !== 'verified' && k !== 'trader').map(([key, badge]) => {
+                        const has = userBadges.includes(key);
+                        return (
+                          <button key={key} onClick={async () => {
+                            const newBadges = has ? userBadges.filter(b => b !== key) : [...userBadges, key];
+                            await supabase.from('profiles').update({ badges: JSON.stringify(newBadges) }).eq('id', u.id);
+                            loadAll();
+                          }} className={`text-[10px] px-2.5 py-1.5 rounded-lg ${has ? 'border' : 'bg-white/5 text-white/30'}`}
+                            style={has ? { background: badge.bg, color: badge.color, borderColor: badge.border } : {}}>
+                            {badge.icon} {has ? badge.label : `Give ${badge.label}`}
+                          </button>
+                        );
+                      })}
+
+                      {/* KYC verify */}
+                      {u.kyc_status === 'pending' && <button onClick={() => verifyUser(u.id)} className="text-[10px] px-2.5 py-1.5 rounded-lg bg-green-500/15 text-green-400 font-semibold">🛡️ Approve KYC</button>}
+
+                      {/* Admin toggle */}
                       {u.id !== user.id && (
                         <button onClick={async () => { await supabase.from('profiles').update({ is_admin: !u.is_admin }).eq('id', u.id); loadAll(); }}
-                          className={`text-[10px] px-2.5 py-1.5 rounded-lg ${u.is_admin ? 'bg-red-500/15 text-red-400' : 'bg-purple-500/10 text-purple-400'}`}>
+                          className={`text-[10px] px-2.5 py-1.5 rounded-lg ${u.is_admin ? 'bg-purple-500/15 text-purple-400' : 'bg-white/5 text-white/30'}`}>
                           {u.is_admin ? 'Remove Admin' : '⚙️ Make Admin'}
+                        </button>
+                      )}
+
+                      {/* Suspend / Unsuspend */}
+                      {u.id !== user.id && (
+                        <button onClick={async () => {
+                          if (u.is_suspended) {
+                            await supabase.from('profiles').update({ is_suspended: false, suspension_reason: '' }).eq('id', u.id);
+                          } else {
+                            const reason = prompt('Suspension reason:');
+                            if (!reason) return;
+                            await supabase.from('profiles').update({ is_suspended: true, suspension_reason: reason }).eq('id', u.id);
+                          }
+                          loadAll();
+                        }} className={`text-[10px] px-2.5 py-1.5 rounded-lg ${u.is_suspended ? 'bg-green-500/15 text-green-400' : 'bg-red-500/10 text-red-400'}`}>
+                          {u.is_suspended ? '✅ Unsuspend' : '⛔ Suspend'}
                         </button>
                       )}
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
 

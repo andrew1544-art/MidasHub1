@@ -10,6 +10,7 @@ import { createClient } from '@/lib/supabase-browser';
 import { timeAgo } from '@/lib/constants';
 import { playMessageSound } from '@/lib/sounds';
 import { compressImage, checkVideoSize } from '@/lib/media';
+import { InlineBadges } from '@/components/Badge';
 
 function parseMedia(msg) {
   const url = msg.media_url || '';
@@ -262,7 +263,7 @@ function ChatInner() {
                     <span className="text-3xl shrink-0">{c.otherUser?.avatar_emoji||'😎'}</span>
                     <div className="flex-1 min-w-0">
                       <div className="flex justify-between items-center">
-                        <div className="flex items-center gap-1.5"><span className="font-semibold text-sm truncate">{c.otherUser?.display_name||'User'}</span>{c.otherUser?.trade_count>=2&&<span className="text-[9px]">✅</span>}</div>
+                        <div className="flex items-center gap-1.5"><span className="font-semibold text-sm truncate">{c.otherUser?.display_name||'User'}</span><InlineBadges profile={c.otherUser} /></div>
                         <span className="text-[10px] text-white/20 shrink-0">{c.lastMessage ? timeAgo(c.lastMessage.created_at) : ''}</span>
                       </div>
                       <span className="text-xs text-white/30 truncate block mt-0.5">{c.preview}</span>
@@ -286,7 +287,7 @@ function ChatInner() {
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5">
                         <span className="font-bold text-sm truncate">{otherUser?.display_name||'User'}</span>
-                        {otherUser?.trade_count>=2&&<span className="text-xs">✅</span>}
+                        <InlineBadges profile={otherUser} />
                         {otherUser?.total_reviews>0&&<span className="text-[10px] text-yellow-400">{parseFloat(otherUser.trade_rating||0).toFixed(1)}⭐</span>}
                       </div>
                       {(()=>{ const ls=otherUser?.last_seen?new Date(otherUser.last_seen):null; const on=ls&&(Date.now()-ls.getTime()<30*60*1000); return on?<div className="text-[11px] text-green-400">● Online</div>:<div className="text-[11px] text-white/25">{ls?`Last seen ${timeAgo(otherUser.last_seen)}`:'● Offline'}</div>; })()}
