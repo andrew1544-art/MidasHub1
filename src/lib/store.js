@@ -100,38 +100,30 @@ export const useStore = create((set, get) => ({
       });
     } catch (err) { clearTimeout(safetyTimeout); set({ loading: false }); }
 
-    // Tab/app visibility — FULL refresh when returning from background
+    // Tab/app visibility — DON'T call getSession (causes lock conflicts)
+    // Supabase auto-refreshes tokens on its own via autoRefreshToken
     if (typeof document !== 'undefined') {
       let lastHidden = 0;
-      document.addEventListener('visibilitychange', async () => {
+      document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'hidden') {
           lastHidden = Date.now();
           return;
         }
-        // App is now visible again
+        // App is visible again
         const { user } = get();
         if (!user) return;
-        const awayTime = Date.now() - lastHidden;
         
-        // If away for more than 30 seconds, do a full refresh
-        if (awayTime > 30000) {
-          try {
-            // Refresh auth token (prevents 401 errors)
-            const { data: { session } } = await supabase.auth.getSession();
-            if (!session?.user) {
-              // Session expired — force re-auth
-              const { data: { session: refreshed } } = await supabase.auth.refreshSession();
-              if (!refreshed) { set({ user: null, profile: null }); return; }
-            }
-            // Heartbeat
-            supabase.from('profiles').update({ last_seen: new Date().toISOString() }).eq('id', user.id).then(() => {});
-            // Refresh notifications and chat count
+        // Heartbeat — always
+        supabase.from('profiles').update({ last_seen: new Date().toISOString() }).eq('id', user.id).then(() => {});
+        
+        // Refresh data (NOT auth — let Supabase handle that)
+        const away = Date.now() - lastHidden;
+        if (away > 10000) {
+          // Away for more than 10 seconds — refresh notifications + chat
+          setTimeout(() => {
             get().fetchNotifications?.();
             get().fetchUnreadChats?.();
-          } catch(e) {}
-        } else {
-          // Quick return — just heartbeat
-          supabase.from('profiles').update({ last_seen: new Date().toISOString() }).eq('id', user.id).then(() => {});
+          }, 300);
         }
       });
     }

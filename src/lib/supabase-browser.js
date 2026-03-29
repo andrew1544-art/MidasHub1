@@ -15,7 +15,13 @@ export function createClient() {
     );
   }
 
-  // Keep it simple — no custom auth config that breaks session persistence
-  client = createBrowserClient(url, key);
+  client = createBrowserClient(url, key, {
+    auth: {
+      flowType: 'pkce',
+      autoRefreshToken: true,
+      persistSession: true,
+      detectSessionInUrl: true,
+    },
+  });
   return client;
 }

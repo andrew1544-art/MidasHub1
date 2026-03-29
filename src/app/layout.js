@@ -40,25 +40,15 @@ export default function RootLayout({ children }) {
       <body className="antialiased">
         {children}
         <script dangerouslySetInnerHTML={{ __html: `
-          // Auto-clear caches
           if ('caches' in window) { caches.keys().then(function(k) { k.forEach(function(c) { caches.delete(c); }); }); }
-          // SW registration
           if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('/sw.js').then(function(r) {
-              r.update();
-              if (r.waiting) r.waiting.postMessage({ type: 'SKIP_WAITING' });
-            }).catch(function(){});
-            navigator.serviceWorker.ready.then(function(r) { if (r.waiting) r.waiting.postMessage({ type: 'SKIP_WAITING' }); });
+            navigator.serviceWorker.register('/sw.js').then(function(r) { r.update(); }).catch(function(){});
           }
-          // AUTO-RELOAD when app returns from long background (>5 min)
-          // This fixes frozen connections on mobile phones
-          var _lastActive = Date.now();
+          // Auto-reload after 10min+ in background (connections are dead by then)
+          var _bg = 0;
           document.addEventListener('visibilitychange', function() {
-            if (document.visibilityState === 'visible') {
-              var away = Date.now() - _lastActive;
-              if (away > 300000) { window.location.reload(); }
-            }
-            _lastActive = Date.now();
+            if (document.visibilityState === 'hidden') { _bg = Date.now(); }
+            else if (_bg && Date.now() - _bg > 600000) { window.location.reload(); }
           });
         `}} />
       </body>

@@ -5,62 +5,42 @@ export default function InstallPrompt() {
   const [show, setShow] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   const [isIOS, setIsIOS] = useState(false);
-  const [isInstalled, setIsInstalled] = useState(false);
 
   useEffect(() => {
-    // Check if already running as PWA
-    if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone) {
-      setIsInstalled(true);
-      return;
-    }
+    // Already installed as PWA — never show
+    if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone) return;
+    // Already dismissed today — don't show
+    const dismissed = localStorage.getItem('midashub-install-dismiss');
+    if (dismissed && Date.now() - parseInt(dismissed) < 86400000) return;
 
     const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
     setIsIOS(ios);
 
-    // Show prompt immediately after 3 seconds (every time until installed)
-    const timer = setTimeout(() => {
-      if (!window.matchMedia('(display-mode: standalone)').matches) {
-        setShow(true);
-      }
-    }, 3000);
+    // Show after 10 seconds (not 3)
+    const timer = setTimeout(() => setShow(true), 10000);
 
-    // Capture the install prompt event
-    const handler = (e) => {
-      e.preventDefault();
-      setDeferredPrompt(e);
-      setShow(true);
-    };
+    // Capture install prompt (don't preventDefault — let browser show its own too)
+    const handler = (e) => { setDeferredPrompt(e); };
     window.addEventListener('beforeinstallprompt', handler);
 
-    return () => {
-      clearTimeout(timer);
-      window.removeEventListener('beforeinstallprompt', handler);
-    };
+    return () => { clearTimeout(timer); window.removeEventListener('beforeinstallprompt', handler); };
   }, []);
 
   const handleInstall = async () => {
     if (deferredPrompt) {
       deferredPrompt.prompt();
-      const { outcome } = await deferredPrompt.userChoice;
-      if (outcome === 'accepted') {
-        setIsInstalled(true);
-        setShow(false);
-      }
+      await deferredPrompt.userChoice;
       setDeferredPrompt(null);
     }
+    setShow(false);
   };
 
   const dismiss = () => {
     setShow(false);
-    // Show again after 60 seconds
-    setTimeout(() => {
-      if (!window.matchMedia('(display-mode: standalone)').matches) {
-        setShow(true);
-      }
-    }, 60000);
+    localStorage.setItem('midashub-install-dismiss', Date.now().toString());
   };
 
-  if (!show || isInstalled) return null;
+  if (!show) return null;
 
   return (
     <div className="fixed left-3 right-3 sm:left-auto sm:right-4 sm:w-80 z-[998] glass rounded-2xl p-4 shadow-2xl border border-[var(--accent)]/20"
@@ -70,26 +50,18 @@ export default function InstallPrompt() {
         <div className="flex-1 min-w-0">
           <div className="font-bold text-sm mb-0.5">Get MidasHub App</div>
           {isIOS ? (
-            <p className="text-xs text-white/40 leading-relaxed">
-              Tap <span className="text-blue-400">⬆️ Share</span> at the bottom → <strong className="text-white/60">&quot;Add to Home Screen&quot;</strong>
-            </p>
+            <p className="text-xs text-white/40 leading-relaxed">Tap <span className="text-blue-400">⬆️ Share</span> → <strong className="text-white/60">&quot;Add to Home Screen&quot;</strong></p>
           ) : deferredPrompt ? (
-            <p className="text-xs text-white/40 leading-relaxed">
-              Install for instant access — works like a real app!
-            </p>
+            <p className="text-xs text-white/40">Install for instant access!</p>
           ) : (
-            <p className="text-xs text-white/40 leading-relaxed">
-              Add to home screen: tap your browser menu (⋮) → <strong className="text-white/60">&quot;Add to Home Screen&quot;</strong>
-            </p>
+            <p className="text-xs text-white/40">Tap ⋮ menu → <strong className="text-white/60">&quot;Add to Home Screen&quot;</strong></p>
           )}
           <div className="flex gap-2 mt-2">
-            {deferredPrompt && (
-              <button onClick={handleInstall} className="btn-primary py-1.5 px-4 text-[11px]">Install ⚡</button>
-            )}
-            <button onClick={dismiss} className="text-[11px] text-white/30 hover:text-white/50 px-2 py-1.5">Later</button>
+            {deferredPrompt && <button onClick={handleInstall} className="btn-primary py-1.5 px-4 text-[11px]">Install ⚡</button>}
+            <button onClick={dismiss} className="text-[11px] text-white/30 hover:text-white/50 px-2 py-1.5">Not now</button>
           </div>
         </div>
-        <button onClick={dismiss} className="text-white/20 hover:text-white/50 text-sm shrink-0 mt-0.5">✕</button>
+        <button onClick={dismiss} className="text-white/20 hover:text-white/50 text-sm shrink-0">✕</button>
       </div>
     </div>
   );
