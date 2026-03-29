@@ -3,6 +3,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useStore } from '@/lib/store';
 import { createClient } from '@/lib/supabase-browser';
 import { PLATFORMS, PLATFORM_LIST } from '@/lib/constants';
+import { compressImage, checkVideoSize, formatSize } from '@/lib/media';
 
 export default function ComposeModal() {
   const { showCompose, setShowCompose, user, profile, showToast } = useStore();
@@ -17,6 +18,7 @@ export default function ComposeModal() {
   const [showCrossPost, setShowCrossPost] = useState(false);
   const [quote, setQuote] = useState(null);
   const [isPublic, setIsPublic] = useState(true);
+  const [uploadProgress, setUploadProgress] = useState('');
   const fileRef = useRef(null);
 
   // Pick up quote repost from PostCard
@@ -47,10 +49,25 @@ export default function ComposeModal() {
 
   if (!showCompose || !user) return null;
 
-  const handleMedia = (e) => {
-    const files = Array.from(e.target.files).slice(0, 4);
-    setMediaFiles(prev => [...prev, ...files].slice(0, 4));
-    setMediaPreviews(prev => [...prev, ...files.map(f => ({ url: URL.createObjectURL(f), isVideo: f.type.startsWith('video/') }))].slice(0, 4));
+  const handleMedia = async (e) => {
+    const rawFiles = Array.from(e.target.files).slice(0, 4 - mediaFiles.length);
+    const processed = [];
+    const previews = [];
+    for (const file of rawFiles) {
+      if (file.type.startsWith('video/')) {
+        const check = checkVideoSize(file, 50);
+        if (!check.ok) { showToast(`Video too large (${check.sizeMB}MB). Max 50MB.`); continue; }
+        processed.push(file);
+        previews.push({ url: URL.createObjectURL(file), isVideo: true, size: formatSize(file.size) });
+      } else {
+        // Compress images automatically
+        const compressed = await compressImage(file);
+        processed.push(compressed);
+        previews.push({ url: URL.createObjectURL(compressed), isVideo: false, size: formatSize(compressed.size) });
+      }
+    }
+    setMediaFiles(prev => [...prev, ...processed].slice(0, 4));
+    setMediaPreviews(prev => [...prev, ...previews].slice(0, 4));
   };
 
   const removeMedia = (idx) => {
@@ -60,12 +77,13 @@ export default function ComposeModal() {
 
   const handlePost = async () => {
     if (!content.trim() || loading) return;
-    setLoading(true); setError('');
+    setLoading(true); setError(''); setUploadProgress('');
     try {
       const supabase = createClient();
       let hasVideo = false;
       
-      // Upload ALL media in PARALLEL (not one by one)
+      // Upload ALL media in PARALLEL with progress
+      if (mediaFiles.length) setUploadProgress(`Uploading ${mediaFiles.length} file${mediaFiles.length > 1 ? 's' : ''}...`);
       const uploadPromises = mediaFiles.map(async (file) => {
         try {
           if (file.type.startsWith('video/')) hasVideo = true;
@@ -81,6 +99,7 @@ export default function ComposeModal() {
       });
       const results = await Promise.all(uploadPromises);
       const mediaUrls = results.filter(Boolean);
+      setUploadProgress('Publishing...');
 
       const parsedTags = tags.split(',').map(t => t.trim().replace('#', '').toLowerCase()).filter(Boolean);
       let finalContent = content.trim();
@@ -99,7 +118,7 @@ export default function ComposeModal() {
       showToast('Posted! ⚡');
       window.dispatchEvent(new Event('midashub:newpost'));
     } catch (err) { setError('Something went wrong. Try again.'); }
-    setLoading(false);
+    setLoading(false); setUploadProgress('');
   };
 
   return (
@@ -154,6 +173,7 @@ export default function ComposeModal() {
                 )}
                 <button onClick={() => removeMedia(i)}
                   className="absolute top-1.5 right-1.5 w-6 h-6 bg-black/60 rounded-full flex items-center justify-center text-xs text-white/80">✕</button>
+                {item.size && <div className="absolute bottom-1.5 left-1.5 px-1.5 py-0.5 rounded bg-black/60 text-[9px] text-white/60">{item.size}</div>}
               </div>
             ))}
           </div>
@@ -217,7 +237,7 @@ export default function ComposeModal() {
         {error && <div className="mb-3 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm">{error}</div>}
 
         <button onClick={handlePost} disabled={!content.trim() || loading} className="btn-primary w-full py-3 flex items-center justify-center gap-2 disabled:opacity-40">
-          {loading ? <><span className="animate-spin">⏳</span> Posting...</> : quote ? '💬 Post with Quote' : 'Post to MidasHub 🚀'}
+          {loading ? <><span className="animate-spin">⏳</span> {uploadProgress || 'Posting...'}</> : quote ? '💬 Post with Quote' : 'Post to MidasHub 🚀'}
         </button>
       </div>
     </div>

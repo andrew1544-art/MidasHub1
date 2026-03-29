@@ -10,6 +10,7 @@ import { useStore } from '@/lib/store';
 import { createClient } from '@/lib/supabase-browser';
 import { timeAgo } from '@/lib/constants';
 import { playMessageSound } from '@/lib/sounds';
+import { compressImage, checkVideoSize } from '@/lib/media';
 
 function parseMedia(msg) {
   const url = msg.media_url || '';
@@ -112,9 +113,17 @@ function ChatInner() {
 
   const send = async () => { if (!text.trim()||sending) return; setSending(true); try { await getSupabase().from('messages').insert({ conversation_id: activeConvo, sender_id: user.id, content: text.trim() }); setText(''); } catch(e){} setSending(false); };
 
-  const sendMedia = async (file) => {
-    if (!file||!activeConvo) return; setUploading(true);
+  const sendMedia = async (rawFile) => {
+    if (!rawFile||!activeConvo) return;
+    // Check video size
+    if (rawFile.type.startsWith('video/')) {
+      const check = checkVideoSize(rawFile, 50);
+      if (!check.ok) { showToast?.(`Video too large (${check.sizeMB}MB). Max 50MB.`); return; }
+    }
+    setUploading(true);
     try {
+      // Compress images automatically
+      const file = rawFile.type.startsWith('image/') ? await compressImage(rawFile) : rawFile;
       const sb = getSupabase(); const ext = file.name.split('.').pop().toLowerCase();
       const path = `chat/${user.id}/${Date.now()}-${Math.random().toString(36).slice(2,6)}.${ext}`;
       const { data, error } = await sb.storage.from('media').upload(path, file, { contentType: file.type, cacheControl: '3600' });

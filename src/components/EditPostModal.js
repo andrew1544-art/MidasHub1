@@ -3,6 +3,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useStore } from '@/lib/store';
 import { createClient } from '@/lib/supabase-browser';
 import { PLATFORMS, PLATFORM_LIST } from '@/lib/constants';
+import { compressImage, checkVideoSize, formatSize } from '@/lib/media';
 
 export default function EditPostModal({ post, onClose, onSaved }) {
   const { user, profile, showToast } = useStore();
@@ -32,13 +33,24 @@ export default function EditPostModal({ post, onClose, onSaved }) {
     };
   }, []);
 
-  const handleNewMedia = (e) => {
-    const files = Array.from(e.target.files).slice(0, 4 - existingMedia.length);
-    setNewMediaFiles(prev => [...prev, ...files].slice(0, 4 - existingMedia.length));
-    setNewMediaPreviews(prev => [...prev, ...files.map(f => ({
-      url: URL.createObjectURL(f),
-      isVideo: f.type.startsWith('video/')
-    }))].slice(0, 4 - existingMedia.length));
+  const handleNewMedia = async (e) => {
+    const rawFiles = Array.from(e.target.files).slice(0, 4 - existingMedia.length);
+    const processed = [];
+    const previews = [];
+    for (const file of rawFiles) {
+      if (file.type.startsWith('video/')) {
+        const check = checkVideoSize(file, 50);
+        if (!check.ok) continue;
+        processed.push(file);
+        previews.push({ url: URL.createObjectURL(file), isVideo: true });
+      } else {
+        const compressed = await compressImage(file);
+        processed.push(compressed);
+        previews.push({ url: URL.createObjectURL(compressed), isVideo: false });
+      }
+    }
+    setNewMediaFiles(prev => [...prev, ...processed].slice(0, 4 - existingMedia.length));
+    setNewMediaPreviews(prev => [...prev, ...previews].slice(0, 4 - existingMedia.length));
   };
 
   const removeExisting = (idx) => {
