@@ -1,52 +1,56 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase-browser';
 import { Suspense } from 'react';
 
 function CallbackInner() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [status, setStatus] = useState('Processing...');
 
   useEffect(() => {
     const handleCallback = async () => {
       try {
         const supabase = createClient();
-        const type = searchParams.get('type');
+        
+        // Check URL hash for recovery token (Supabase puts tokens in hash)
+        const hash = window.location.hash;
+        const params = new URLSearchParams(window.location.search);
+        const isRecovery = hash.includes('type=recovery') || params.get('type') === 'recovery';
+        
+        // Exchange the code/token
+        if (params.get('code')) {
+          const { error } = await supabase.auth.exchangeCodeForSession(params.get('code'));
+          if (error) console.warn('Code exchange error:', error.message);
+        }
 
-        // Handle the auth code exchange
-        const { data: { session }, error } = await supabase.auth.getSession();
+        // Check if we have a session now
+        const { data: { session } } = await supabase.auth.getSession();
 
-        if (type === 'recovery') {
-          // Password reset — redirect to app with reset mode
+        if (isRecovery && session) {
           setStatus('Redirecting to reset password...');
-          // The session is set by Supabase from the recovery link
-          // Open the auth modal in reset mode
-          setTimeout(() => {
-            window.location.href = '/feed?reset=true';
-          }, 500);
+          // Store a flag that the password reset modal should open
+          sessionStorage.setItem('midashub-reset-password', '1');
+          setTimeout(() => { window.location.href = '/feed'; }, 300);
           return;
         }
 
         if (session) {
           setStatus('Logged in! Redirecting...');
-          setTimeout(() => router.push('/feed'), 500);
-        } else if (error) {
-          setStatus('Something went wrong. Redirecting...');
-          setTimeout(() => router.push('/?verified=true'), 2000);
+          setTimeout(() => { window.location.href = '/feed'; }, 300);
         } else {
           setStatus('Email verified! You can now log in.');
-          setTimeout(() => router.push('/?verified=true'), 2000);
+          setTimeout(() => { window.location.href = '/?verified=true'; }, 1500);
         }
       } catch (e) {
+        console.warn('Callback error:', e);
         setStatus('Redirecting...');
-        setTimeout(() => router.push('/'), 2000);
+        setTimeout(() => { window.location.href = '/'; }, 1500);
       }
     };
 
     handleCallback();
-  }, [router, searchParams]);
+  }, []);
 
   return (
     <div className="min-h-screen flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #0a0a0f, #1a0a2e, #0d1b2a)' }}>

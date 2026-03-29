@@ -28,7 +28,19 @@ function FeedInner() {
       // Non-logged-in users only see public posts
       if (!user) query = query.eq('is_public', true);
       const { data, error } = await query;
-      if (error) { console.error('Feed error:', error); setLoading(false); setLoadingMore(false); loadingMoreRef.current = false; return; }
+      if (error) {
+        console.warn('Feed query failed, retrying...', error.message);
+        // Retry once after a short delay (auth token might need refreshing)
+        await new Promise(r => setTimeout(r, 500));
+        const retry = await supabase.from('posts').select('*, profiles(*)').order('created_at', { ascending: false }).range(pageNum * PAGE_SIZE, (pageNum + 1) * PAGE_SIZE - 1);
+        if (retry.error || !retry.data) { setLoading(false); setLoadingMore(false); loadingMoreRef.current = false; return; }
+        // Use retry data
+        const data2 = retry.data;
+        append ? setPosts(prev => [...prev, ...data2]) : setPosts(data2);
+        setHasMore(data2.length === PAGE_SIZE); hasMoreRef.current = data2.length === PAGE_SIZE;
+        setLoading(false); setLoadingMore(false); loadingMoreRef.current = false;
+        return;
+      }
       if (data) {
         if (user) {
           const ids = data.map(p => p.id);
@@ -61,10 +73,13 @@ function FeedInner() {
     return () => clearTimeout(safety);
   }, [filter, fetchPosts]);
 
-  // Detect password reset redirect
+  // Detect password reset redirect (from URL or sessionStorage)
   useEffect(() => {
-    if (searchParams.get('reset') === 'true' && user) {
+    const fromUrl = searchParams.get('reset') === 'true';
+    const fromStorage = typeof sessionStorage !== 'undefined' && sessionStorage.getItem('midashub-reset-password') === '1';
+    if ((fromUrl || fromStorage) && user) {
       setShowAuth(true, 'reset');
+      if (fromStorage) sessionStorage.removeItem('midashub-reset-password');
       window.history.replaceState({}, '', '/feed');
     }
   }, [searchParams, user]);

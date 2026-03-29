@@ -87,7 +87,13 @@ export const useStore = create((set, get) => ({
       }
 
       supabase.auth.onAuthStateChange(async (event, session) => {
-        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+        if (event === 'PASSWORD_RECOVERY') {
+          // User clicked password reset link — open reset modal
+          if (session?.user) {
+            const profile = await loadProfile(supabase, session.user.id);
+            set({ user: session.user, profile, loading: false, showAuth: true, authMode: 'reset' });
+          }
+        } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
           if (session?.user) {
             const profile = await loadProfile(supabase, session.user.id);
             set({ user: session.user, profile, loading: false });
