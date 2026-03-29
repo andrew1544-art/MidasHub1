@@ -115,6 +115,7 @@ export default function ProfilePage() {
                 { val: formatCount(stats.friends), label: 'Friends' },
                 { val: formatCount(stats.likes), label: 'Likes' },
                 { val: formatCount(prof.xp || 0), label: 'XP' },
+                { val: prof.total_reviews ? `${parseFloat(prof.trade_rating || 0).toFixed(1)}⭐` : '—', label: `${prof.total_reviews || 0} Reviews` },
               ].map((s, i) => (
                 <div key={i} className="text-center">
                   <div className="font-black text-xl">{s.val}</div>
