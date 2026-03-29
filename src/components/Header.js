@@ -12,7 +12,7 @@ import { playNotificationSound, playMessageSound } from '@/lib/sounds';
 export default function Header() {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, profile, unreadCount, notifications, setShowAuth, logout, fetchNotifications, markNotificationsRead, setShowCompose } = useStore();
+  const { user, profile, unreadCount, unreadChatCount, notifications, setShowAuth, logout, fetchNotifications, markNotificationsRead, setShowCompose } = useStore();
   const [showNotif, setShowNotif] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [search, setSearch] = useState('');
@@ -20,7 +20,6 @@ export default function Header() {
   const [showSearch, setShowSearch] = useState(false);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [acceptedIds, setAcceptedIds] = useState(new Set());
-  const [unreadChats, setUnreadChats] = useState(0);
   const notifRef = useRef(null);
   const menuRef = useRef(null);
   const prevUnread = useRef(-1);
@@ -59,48 +58,36 @@ export default function Header() {
     prevUnread.current = unreadCount;
   }, [unreadCount, notifications]);
 
-  // ===== REALTIME: NOTIFICATIONS + CHAT UNREAD =====
+  // ===== REALTIME NOTIFICATIONS + LIGHTWEIGHT CHAT COUNT =====
   useEffect(() => {
     if (!user) return;
     const supabase = createClient();
 
-    // Notification channel
+    // Realtime: instant notification updates
     const notifCh = supabase.channel('notifs-live-' + user.id)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` }, () => {
         fetchNotifications();
       }).subscribe();
 
-    // Poll chat unread count every 15s
-    const fetchChatUnread = async () => {
-      try {
-        const { data: memberships } = await supabase.from('conversation_members').select('conversation_id, last_read_at').eq('user_id', user.id);
-        if (!memberships?.length) { setUnreadChats(0); return; }
-        let total = 0;
-        for (const m of memberships) {
-          const { count } = await supabase.from('messages').select('*', { count: 'exact', head: true }).eq('conversation_id', m.conversation_id).neq('sender_id', user.id).gt('created_at', m.last_read_at || '1970-01-01');
-          total += (count || 0);
+    // Realtime: instant chat message detection (just bump unread count)
+    const chatCh = supabase.channel('chat-unread-' + user.id)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
+        if (payload.new?.sender_id !== user.id) {
+          // New message from someone else — refresh count
+          useStore.getState().fetchUnreadChats();
         }
-        setUnreadChats(total);
-      } catch (e) {}
-    };
-    fetchChatUnread();
-    const chatPoll = setInterval(fetchChatUnread, 15000);
+      }).subscribe();
 
-    // Update last_seen every 60s for online status
-    const updatePresence = async () => {
-      try { await supabase.from('profiles').update({ last_seen: new Date().toISOString() }).eq('id', user.id); } catch (e) {}
-    };
-    updatePresence();
-    const presencePoll = setInterval(updatePresence, 60000);
+    // Initial fetch
+    useStore.getState().fetchUnreadChats();
 
-    // Poll notifications every 30s as backup
-    const notifPoll = setInterval(() => { try { fetchNotifications(); } catch (e) {} }, 30000);
+    // Light backup poll every 60s (not 15s)
+    const chatPoll = setInterval(() => useStore.getState().fetchUnreadChats(), 60000);
 
     return () => {
       supabase.removeChannel(notifCh);
+      supabase.removeChannel(chatCh);
       clearInterval(chatPoll);
-      clearInterval(presencePoll);
-      clearInterval(notifPoll);
     };
   }, [user]);
 
@@ -134,7 +121,7 @@ export default function Header() {
     { href: '/viral', icon: '🔥', label: 'Viral' },
     { href: '/people', icon: '👥', label: 'People' },
     { href: '/leaderboard', icon: '🏆', label: 'Ranks' },
-    { href: '/chat', icon: '💬', label: 'Chat', badge: unreadChats },
+    { href: '/chat', icon: '💬', label: 'Chat', badge: unreadChatCount },
   ];
 
   return (

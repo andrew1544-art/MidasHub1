@@ -23,7 +23,6 @@ async function loadProfile(supabase, userId) {
 
 let authInitialized = false;
 let heartbeatInterval = null;
-let chatCountInterval = null;
 
 async function awardDailyLogin(supabase, userId, set) {
   try {
@@ -37,23 +36,16 @@ async function awardDailyLogin(supabase, userId, set) {
   } catch (e) {}
 }
 
-// Request browser notification permission
 function requestNotifPermission() {
   if (typeof window === 'undefined' || !('Notification' in window)) return;
-  if (Notification.permission === 'default') {
-    setTimeout(() => Notification.requestPermission(), 5000);
-  }
+  if (Notification.permission === 'default') setTimeout(() => Notification.requestPermission(), 5000);
 }
 
-// Send browser notification (even when app is in background)
-function showBrowserNotif(title, body, icon = '⚡') {
+function showBrowserNotif(title, body) {
   if (typeof window === 'undefined' || !('Notification' in window)) return;
   if (Notification.permission !== 'granted') return;
   try {
-    const n = new Notification(title, {
-      body, icon: '/icon-192.png', badge: '/icon-192.png',
-      tag: 'midashub-' + Date.now(), renotify: true, vibrate: [200, 100, 200],
-    });
+    const n = new Notification(title, { body, icon: '/icon-192.png', badge: '/icon-192.png', tag: 'midashub-' + Date.now(), renotify: true });
     n.onclick = () => { window.focus(); n.close(); };
   } catch (e) {}
 }
@@ -75,21 +67,24 @@ export const useStore = create((set, get) => ({
     const supabase = getSupabase();
     if (!supabase) { set({ loading: false }); return; }
 
-    const safetyTimeout = setTimeout(() => { if (get().loading) set({ loading: false }); }, 4000);
+    // Fast timeout - show UI quickly
+    const safetyTimeout = setTimeout(() => { if (get().loading) set({ loading: false }); }, 2500);
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
+        // Load profile and set user IMMEDIATELY, then do background tasks
         const profile = await loadProfile(supabase, session.user.id);
         set({ user: session.user, profile, loading: false });
-        awardDailyLogin(supabase, session.user.id, set);
+        clearTimeout(safetyTimeout);
+        // Background tasks - don't block UI
         requestNotifPermission();
-        // Start heartbeat (update last_seen every 2 min)
         startHeartbeat(supabase, session.user.id);
-        // Start chat count polling
-        startChatCountPoll(supabase, session.user.id, set);
-      } else { set({ loading: false }); }
-      clearTimeout(safetyTimeout);
+        awardDailyLogin(supabase, session.user.id, set);
+      } else {
+        set({ loading: false });
+        clearTimeout(safetyTimeout);
+      }
 
       supabase.auth.onAuthStateChange(async (event, session) => {
         if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
@@ -97,36 +92,24 @@ export const useStore = create((set, get) => ({
             const profile = await loadProfile(supabase, session.user.id);
             set({ user: session.user, profile, loading: false });
             startHeartbeat(supabase, session.user.id);
-            startChatCountPoll(supabase, session.user.id, set);
           }
         } else if (event === 'SIGNED_OUT') {
           set({ user: null, profile: null });
           if (heartbeatInterval) clearInterval(heartbeatInterval);
-          if (chatCountInterval) clearInterval(chatCountInterval);
         }
       });
     } catch (err) { clearTimeout(safetyTimeout); set({ loading: false }); }
 
-    // Tab visibility — refresh session + heartbeat on return
+    // Tab visibility — lightweight refresh
     if (typeof document !== 'undefined') {
-      document.addEventListener('visibilitychange', async () => {
-        if (document.visibilityState === 'visible') {
-          try {
-            const { data: { session } } = await supabase.auth.getSession();
-            if (session?.user) {
-              const cur = get().user;
-              if (!cur || cur.id !== session.user.id) {
-                const profile = await loadProfile(supabase, session.user.id);
-                set({ user: session.user, profile });
-              }
-              // Heartbeat on return
-              supabase.from('profiles').update({ last_seen: new Date().toISOString() }).eq('id', session.user.id).then(() => {});
-              // Refresh chat count
-              get().fetchUnreadChats?.();
-              get().fetchNotifications?.();
-            } else if (get().user) { set({ user: null, profile: null }); }
-          } catch (e) {}
-        }
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState !== 'visible') return;
+        const { user } = get();
+        if (!user) return;
+        // Just heartbeat + quick notification refresh - don't reload session/profile
+        supabase.from('profiles').update({ last_seen: new Date().toISOString() }).eq('id', user.id).then(() => {});
+        // Debounced notification refresh
+        setTimeout(() => get().fetchNotifications?.(), 500);
       });
     }
   },
@@ -166,7 +149,6 @@ export const useStore = create((set, get) => ({
     const supabase = getSupabase();
     if (supabase) { try { await supabase.auth.signOut(); } catch (e) {} }
     if (heartbeatInterval) clearInterval(heartbeatInterval);
-    if (chatCountInterval) clearInterval(chatCountInterval);
     set({ user: null, profile: null });
   },
 
@@ -189,18 +171,13 @@ export const useStore = create((set, get) => ({
     const { user } = get();
     if (!user || !supabase) return;
     try {
-      const { data } = await supabase.from('notifications').select('*, from_user:profiles!notifications_from_user_id_fkey(*)').eq('user_id', user.id).order('created_at', { ascending: false }).limit(50);
+      const { data } = await supabase.from('notifications').select('*, from_user:profiles!notifications_from_user_id_fkey(*)').eq('user_id', user.id).order('created_at', { ascending: false }).limit(30);
       const newUnread = (data || []).filter(n => !n.is_read).length;
       const oldUnread = get().unreadCount;
       set({ notifications: data || [], unreadCount: newUnread });
-
-      // Browser push for new notifications
-      if (newUnread > oldUnread && data?.length) {
+      if (newUnread > oldUnread && oldUnread >= 0 && data?.length) {
         const newest = data.find(n => !n.is_read);
-        if (newest) {
-          const name = newest.from_user?.display_name || 'Someone';
-          showBrowserNotif('MidasHub', `${name} ${newest.content || 'interacted with your post'}`, '⚡');
-        }
+        if (newest) showBrowserNotif('MidasHub', `${newest.from_user?.display_name || 'Someone'} ${newest.content || 'interacted with your post'}`);
       }
     } catch (e) {}
   },
@@ -215,7 +192,7 @@ export const useStore = create((set, get) => ({
     } catch (e) {}
   },
 
-  // === CHAT UNREAD ===
+  // === CHAT UNREAD — single fast query ===
   unreadChatCount: 0,
 
   fetchUnreadChats: async () => {
@@ -223,35 +200,29 @@ export const useStore = create((set, get) => ({
     const { user } = get();
     if (!user || !supabase) return;
     try {
+      // Get all conversations + last_read in ONE query
       const { data: memberships } = await supabase.from('conversation_members').select('conversation_id, last_read_at').eq('user_id', user.id);
       if (!memberships?.length) { set({ unreadChatCount: 0 }); return; }
-      let total = 0;
-      for (const m of memberships) {
-        const { count } = await supabase.from('messages').select('*', { count: 'exact', head: true })
-          .eq('conversation_id', m.conversation_id).neq('sender_id', user.id)
-          .gt('created_at', m.last_read_at || '1970-01-01');
-        total += (count || 0);
-      }
-      set({ unreadChatCount: total });
+      // Batch: count all unread across all convos in PARALLEL (not sequential)
+      const counts = await Promise.all(
+        memberships.map(m =>
+          supabase.from('messages').select('*', { count: 'exact', head: true })
+            .eq('conversation_id', m.conversation_id).neq('sender_id', user.id)
+            .gt('created_at', m.last_read_at || '1970-01-01')
+            .then(r => r.count || 0)
+            .catch(() => 0)
+        )
+      );
+      set({ unreadChatCount: counts.reduce((a, b) => a + b, 0) });
     } catch (e) {}
   },
 }));
 
-// Heartbeat — update last_seen every 2 minutes
+// Heartbeat — update last_seen every 3 minutes (single source, no duplicates)
 function startHeartbeat(supabase, userId) {
   if (heartbeatInterval) clearInterval(heartbeatInterval);
-  // Immediate
   supabase.from('profiles').update({ last_seen: new Date().toISOString() }).eq('id', userId).then(() => {});
   heartbeatInterval = setInterval(() => {
     supabase.from('profiles').update({ last_seen: new Date().toISOString() }).eq('id', userId).then(() => {});
-  }, 120000); // 2 min
-}
-
-// Chat count polling — every 30 seconds
-function startChatCountPoll(supabase, userId, set) {
-  if (chatCountInterval) clearInterval(chatCountInterval);
-  useStore.getState().fetchUnreadChats();
-  chatCountInterval = setInterval(() => {
-    useStore.getState().fetchUnreadChats();
-  }, 30000);
+  }, 180000); // 3 min
 }

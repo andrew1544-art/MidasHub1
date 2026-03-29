@@ -13,8 +13,8 @@ export default function AppShell({ children }) {
   useEffect(() => {
     initAuth();
     loadTheme();
-    // If still loading after 5s, force show the page anyway
-    const fallback = setTimeout(() => setForceShow(true), 5000);
+    // If still loading after 2s, force show the page anyway
+    const fallback = setTimeout(() => setForceShow(true), 2000);
     return () => clearTimeout(fallback);
   }, []);
 
