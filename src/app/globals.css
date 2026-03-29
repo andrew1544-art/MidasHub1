@@ -12,6 +12,11 @@
   --accent: #FFD700;
   --accent-alt: #FFA500;
   --gradient: linear-gradient(135deg, #0a0a0f 0%, #1a0a2e 40%, #0d1b2a 70%, #0a0a0f 100%);
+  /* iPhone safe areas */
+  --sat: env(safe-area-inset-top, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px);
+  --sar: env(safe-area-inset-right, 0px);
 }
 
 [data-theme="ocean"] {
@@ -28,7 +33,6 @@
 * { box-sizing: border-box; scrollbar-width: thin; scrollbar-color: #333 transparent; }
 
 html {
-  /* Prevent mobile viewport bounce/resize on keyboard open */
   overflow-x: hidden;
   height: -webkit-fill-available;
 }
@@ -43,9 +47,12 @@ body {
   overflow-x: hidden;
   -webkit-text-size-adjust: 100%;
   -webkit-tap-highlight-color: transparent;
+  /* Push content below iPhone notch/dynamic island */
+  padding-top: var(--sat);
+  padding-left: var(--sal);
+  padding-right: var(--sar);
 }
 
-/* Lock body scroll when modal is open */
 body.modal-open {
   overflow: hidden;
   position: fixed;
@@ -59,14 +66,12 @@ body.modal-open {
   -webkit-backdrop-filter: blur(20px);
   border: 1px solid var(--border);
 }
-
 .glass-light {
   background: var(--card);
   border: 1px solid var(--border);
 }
 
 .accent-gradient { background: linear-gradient(135deg, var(--accent), var(--accent-alt)); }
-
 .accent-text {
   background: linear-gradient(135deg, var(--accent), var(--accent-alt));
   -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
@@ -74,11 +79,7 @@ body.modal-open {
 
 .hover-lift { transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1); }
 .hover-lift:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3); }
-
-/* Remove hover lift on mobile to prevent jank */
-@media (hover: none) {
-  .hover-lift:hover { transform: none; box-shadow: none; }
-}
+@media (hover: none) { .hover-lift:hover { transform: none; box-shadow: none; } }
 
 .btn-primary {
   @apply px-5 py-2.5 rounded-xl font-semibold text-sm transition-all cursor-pointer;
@@ -101,8 +102,7 @@ body.modal-open {
   @apply w-full px-4 py-3 rounded-xl text-sm outline-none transition-all;
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.1); color: #fff;
-  /* Prevent zoom on mobile */
-  font-size: 16px;
+  font-size: 16px; /* prevent iOS zoom */
 }
 @media (min-width: 640px) { .input-field { font-size: 14px; } }
 .input-field::placeholder { color: rgba(255, 255, 255, 0.3); }
@@ -122,9 +122,8 @@ body.modal-open {
   background-size: 200% 100%; animation: shimmer 1.5s infinite; border-radius: 8px;
 }
 
-/* Animations — NO transform/opacity to prevent mobile jank */
-.animate-slide-up { /* purely cosmetic, no layout shift */ }
-.animate-fade-in { /* purely cosmetic, no layout shift */ }
+.animate-slide-up { }
+.animate-fade-in { }
 @keyframes glow {
   0%,100% { box-shadow: 0 0 15px color-mix(in srgb, var(--accent) 20%, transparent); }
   50% { box-shadow: 0 0 30px color-mix(in srgb, var(--accent) 40%, transparent); }
@@ -132,16 +131,19 @@ body.modal-open {
 .animate-glow { animation: glow 3s ease-in-out infinite; }
 
 .toast {
-  @apply fixed bottom-20 sm:bottom-6 left-1/2 -translate-x-1/2 px-6 py-3 rounded-xl text-sm font-medium z-[9999];
+  @apply fixed left-1/2 -translate-x-1/2 px-6 py-3 rounded-xl text-sm font-medium z-[9999];
+  bottom: calc(70px + var(--sab));
   background: var(--card); backdrop-filter: blur(20px); border: 1px solid var(--border);
 }
+@media (min-width: 640px) { .toast { bottom: 24px; } }
 
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 .no-scrollbar::-webkit-scrollbar { display: none; }
 
-/* Modal overlay — stable, no transform animations */
+/* Modal — respects safe areas */
 .modal-overlay {
-  @apply fixed inset-0 z-[999] flex items-center justify-center p-3 sm:p-4;
+  @apply fixed inset-0 z-[999] flex items-center justify-center;
+  padding: calc(12px + var(--sat)) calc(12px + var(--sar)) calc(12px + var(--sab)) calc(12px + var(--sal));
   background: rgba(0,0,0,0.7);
   -webkit-backdrop-filter: blur(4px);
   backdrop-filter: blur(4px);
@@ -149,4 +151,9 @@ body.modal-open {
 .modal-content {
   @apply w-full glass rounded-2xl sm:rounded-3xl max-h-[85vh] overflow-y-auto overscroll-contain;
   -webkit-overflow-scrolling: touch;
+}
+
+/* Bottom nav — sits above iPhone home indicator */
+.bottom-nav {
+  padding-bottom: calc(4px + var(--sab));
 }

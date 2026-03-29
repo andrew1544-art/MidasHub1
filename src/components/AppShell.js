@@ -37,7 +37,7 @@ export default function AppShell({ children }) {
   return (
     <>
       <Header />
-      <main className="pb-20 md:pb-8">{children}</main>
+      <main className="pb-24 md:pb-8" style={{ paddingBottom: 'calc(80px + env(safe-area-inset-bottom, 0px))' }}>{children}</main>
       <AuthModal />
       <ComposeModal />
       <InstallPrompt />

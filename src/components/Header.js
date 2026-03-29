@@ -325,7 +325,7 @@ export default function Header() {
       </header>
 
       {/* Mobile bottom nav */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 glass border-t border-white/5 z-50">
+      <div className="md:hidden fixed bottom-0 left-0 right-0 glass border-t border-white/5 z-50 bottom-nav">
         <div className="flex justify-around py-1.5">
           {navItems.map((item) => (
             <Link key={item.href} href={item.href}

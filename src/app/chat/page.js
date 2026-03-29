@@ -197,7 +197,7 @@ function ChatInner() {
   return (
     <AppShell>
       <div className="max-w-4xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
-        <div className="glass-light rounded-2xl overflow-hidden" style={{ height: 'calc(100vh - 140px)', minHeight: 400 }}>
+        <div className="glass-light rounded-2xl overflow-hidden" style={{ height: 'calc(100vh - 140px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px))', minHeight: 400 }}>
           <div className="flex h-full">
             {/* Sidebar */}
             <div className={`w-full md:w-80 border-r border-white/5 flex flex-col ${activeConvo ? 'hidden md:flex' : 'flex'}`}>

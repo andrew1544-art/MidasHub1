@@ -151,7 +151,7 @@ function EscrowPaymentPanel({ trade, onPaid }) {
     <div className="space-y-3">
       <div className="text-sm font-bold mb-1">💰 Pay to MidasHub Escrow</div>
       <div className="p-3 rounded-lg bg-green-500/8 border border-green-500/15 text-xs text-green-300 leading-relaxed">
-        ✅ Send <strong>{trade.currency} {total}</strong> (item + 2% fee) to one of our escrow accounts below. We hold the money until you confirm delivery. The seller gets paid only after you&apos;re satisfied.
+        ✅ Send <strong>{trade.currency} {total}</strong> (price + 2% fee) to MidasHub escrow below. We hold the funds until you confirm you received the item/service. The seller only gets paid after you&apos;re satisfied.
       </div>
 
       <div className="text-xs text-white/40 mb-1">Choose payment method:</div>

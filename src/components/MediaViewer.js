@@ -68,6 +68,7 @@ export default function MediaViewer({ media = [], startIndex = 0, onClose }) {
 
   return (
     <div className="fixed inset-0 z-[9999] bg-black/95 flex flex-col"
+      style={{ paddingTop: 'env(safe-area-inset-top, 0px)', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
       onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
 
       {/* Top bar */}

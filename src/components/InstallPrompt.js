@@ -63,7 +63,8 @@ export default function InstallPrompt() {
   if (!show || isInstalled) return null;
 
   return (
-    <div className="fixed bottom-20 sm:bottom-4 left-3 right-3 sm:left-auto sm:right-4 sm:w-80 z-[998] glass rounded-2xl p-4 shadow-2xl border border-[var(--accent)]/20">
+    <div className="fixed left-3 right-3 sm:left-auto sm:right-4 sm:w-80 z-[998] glass rounded-2xl p-4 shadow-2xl border border-[var(--accent)]/20"
+      style={{ bottom: 'calc(70px + env(safe-area-inset-bottom, 0px))' }}>
       <div className="flex items-start gap-3">
         <div className="w-11 h-11 rounded-xl accent-gradient flex items-center justify-center text-xl shrink-0">⚡</div>
         <div className="flex-1 min-w-0">
