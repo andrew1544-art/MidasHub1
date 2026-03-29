@@ -14,6 +14,7 @@ export default function LeaderboardPage() {
   const [myRankPos, setMyRankPos] = useState(null);
 
   useEffect(() => {
+    const safety = setTimeout(() => setLoading(false), 3000);
     const fetch = async () => {
       try {
         const supabase = createClient();
@@ -38,7 +39,8 @@ export default function LeaderboardPage() {
       } catch (e) { console.error('Leaderboard error:', e); }
       setLoading(false);
     };
-    fetch();
+    fetch().finally(() => clearTimeout(safety));
+    return () => clearTimeout(safety);
   }, [user, profile]);
 
   const podiumMedals = ['🥇', '🥈', '🥉'];

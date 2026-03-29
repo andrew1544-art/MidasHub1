@@ -37,7 +37,11 @@ export default function ViralPage() {
     setLoading(false);
   }, [sortBy, user]);
 
-  useEffect(() => { fetchViral(); }, [fetchViral]);
+  useEffect(() => {
+    const safety = setTimeout(() => setLoading(false), 3000);
+    fetchViral().finally(() => clearTimeout(safety));
+    return () => clearTimeout(safety);
+  }, [fetchViral]);
 
   const medals = ['🥇','🥈','🥉'];
 

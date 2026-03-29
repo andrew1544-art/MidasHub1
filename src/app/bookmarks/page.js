@@ -12,20 +12,24 @@ export default function BookmarksPage() {
 
   useEffect(() => {
     if (!user) { setLoading(false); return; }
+    const safety = setTimeout(() => setLoading(false), 3000);
     const fetch = async () => {
-      const supabase = createClient();
-      const { data: bk } = await supabase.from('bookmarks').select('post_id').eq('user_id', user.id).order('created_at', { ascending: false });
-      if (!bk?.length) { setPosts([]); setLoading(false); return; }
-      const ids = bk.map(b => b.post_id);
-      const { data } = await supabase.from('posts').select('*, profiles(*)').in('id', ids);
-      const [lr] = await Promise.all([supabase.from('likes').select('post_id').eq('user_id', user.id).in('post_id', ids)]);
-      const liked = new Set((lr.data||[]).map(l => l.post_id));
-      (data||[]).forEach(p => { p.user_liked = liked.has(p.id); p.user_bookmarked = true; });
-      const map = new Map((data||[]).map(p => [p.id, p]));
-      setPosts(ids.map(id => map.get(id)).filter(Boolean));
+      try {
+        const supabase = createClient();
+        const { data: bk } = await supabase.from('bookmarks').select('post_id').eq('user_id', user.id).order('created_at', { ascending: false });
+        if (!bk?.length) { setPosts([]); setLoading(false); return; }
+        const ids = bk.map(b => b.post_id);
+        const { data } = await supabase.from('posts').select('*, profiles(*)').in('id', ids);
+        const [lr] = await Promise.all([supabase.from('likes').select('post_id').eq('user_id', user.id).in('post_id', ids)]);
+        const liked = new Set((lr.data||[]).map(l => l.post_id));
+        (data||[]).forEach(p => { p.user_liked = liked.has(p.id); p.user_bookmarked = true; });
+        const map = new Map((data||[]).map(p => [p.id, p]));
+        setPosts(ids.map(id => map.get(id)).filter(Boolean));
+      } catch(e) {}
       setLoading(false);
     };
-    fetch();
+    fetch().finally(() => clearTimeout(safety));
+    return () => clearTimeout(safety);
   }, [user]);
 
   if (!user) return <AppShell><div className="max-w-2xl mx-auto px-4 py-20 text-center"><div className="text-6xl mb-4">🔖</div><h2 className="text-2xl font-bold mb-3">Log in to see bookmarks</h2><button onClick={() => setShowAuth(true)} className="btn-primary mt-4 px-8 py-3">Log In</button></div></AppShell>;

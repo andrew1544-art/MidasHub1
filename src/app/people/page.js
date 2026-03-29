@@ -18,7 +18,10 @@ export default function PeoplePage() {
   const [friendIds, setFriendIds] = useState(new Set());
   const [pendingIds, setPendingIds] = useState(new Set());
 
-  useEffect(() => { fetchData(); }, [user, tab]);
+  useEffect(() => {
+    const safety = setTimeout(() => setLoading(false), 3000);
+    fetchData().finally(() => clearTimeout(safety));
+  }, [user, tab]);
 
   const fetchData = async () => {
     setLoading(true);

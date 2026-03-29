@@ -137,11 +137,15 @@ function ChatInner() {
   // Init
   useEffect(() => {
     if (!user) { setLoading(false); return; }
+    // Safety: force loading off after 3s no matter what
+    const safety = setTimeout(() => setLoading(false), 3000);
     (async () => {
       await loadConvos();
       const t = searchParams.get('user');
       if (t && !startedRef.current) { startedRef.current = true; await startChat(t); }
+      clearTimeout(safety);
     })();
+    return () => clearTimeout(safety);
   }, [user]);
 
   useEffect(() => { const t = searchParams.get('user'); if (t && user && startedRef.current) startChat(t); }, [searchParams]);

@@ -24,7 +24,11 @@ export default function ProfilePage() {
 
   const isOwn = myProfile?.username === username;
 
-  useEffect(() => { fetchProfile(); }, [username, user]);
+  useEffect(() => {
+    const safety = setTimeout(() => setLoading(false), 3000);
+    fetchProfile().finally(() => clearTimeout(safety));
+    return () => clearTimeout(safety);
+  }, [username, user]);
 
   const fetchProfile = async () => {
     setLoading(true);
