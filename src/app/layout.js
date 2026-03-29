@@ -42,15 +42,15 @@ export default function RootLayout({ children }) {
         <script dangerouslySetInnerHTML={{ __html: `
           // Clear all caches
           if ('caches' in window) { caches.keys().then(function(k) { k.forEach(function(c) { caches.delete(c); }); }); }
-          // Register/update SW
+          // Register/update SW — cache-bust to ensure latest version
           if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('/sw.js').then(function(r) {
+            navigator.serviceWorker.register('/sw.js?v=8').then(function(r) {
               r.update();
               if (r.waiting) { r.waiting.postMessage({ type: 'SKIP_WAITING' }); }
               r.addEventListener('updatefound', function() {
                 var nw = r.installing;
                 if (nw) nw.addEventListener('statechange', function() {
-                  if (nw.state === 'activated') window.location.reload();
+                  if (nw.state === 'activated') console.log('[SW] New version activated');
                 });
               });
             }).catch(function(){});
