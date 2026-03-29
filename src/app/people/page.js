@@ -23,6 +23,13 @@ export default function PeoplePage() {
     fetchData().finally(() => clearTimeout(safety));
   }, [user, tab]);
 
+  // Refetch when app resumes from background
+  useEffect(() => {
+    const onResumed = () => fetchData();
+    window.addEventListener('midashub:resumed', onResumed);
+    return () => window.removeEventListener('midashub:resumed', onResumed);
+  }, [user, tab]);
+
   const fetchData = async () => {
     setLoading(true);
     const supabase = createClient();

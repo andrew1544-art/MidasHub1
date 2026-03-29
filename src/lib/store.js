@@ -100,30 +100,39 @@ export const useStore = create((set, get) => ({
       });
     } catch (err) { clearTimeout(safetyTimeout); set({ loading: false }); }
 
-    // Tab/app visibility — DON'T call getSession (causes lock conflicts)
-    // Supabase auto-refreshes tokens on its own via autoRefreshToken
+    // Tab/app visibility — refresh auth token on return
+    // Safe now because middleware no longer calls getUser() (no lock conflict)
     if (typeof document !== 'undefined') {
       let lastHidden = 0;
-      document.addEventListener('visibilitychange', () => {
+      document.addEventListener('visibilitychange', async () => {
         if (document.visibilityState === 'hidden') {
           lastHidden = Date.now();
           return;
         }
-        // App is visible again
-        const { user } = get();
-        if (!user) return;
-        
-        // Heartbeat — always
-        supabase.from('profiles').update({ last_seen: new Date().toISOString() }).eq('id', user.id).then(() => {});
-        
-        // Refresh data (NOT auth — let Supabase handle that)
         const away = Date.now() - lastHidden;
-        if (away > 10000) {
-          // Away for more than 10 seconds — refresh notifications + chat
-          setTimeout(() => {
-            get().fetchNotifications?.();
-            get().fetchUnreadChats?.();
-          }, 300);
+        const { user: currentUser } = get();
+        if (!currentUser) return;
+
+        try {
+          // Refresh the auth session — this renews the token so queries work
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session?.user) {
+            // Token refreshed — update heartbeat
+            supabase.from('profiles').update({ last_seen: new Date().toISOString() }).eq('id', session.user.id).then(() => {});
+            // Refresh notifications + chat
+            if (away > 5000) {
+              get().fetchNotifications?.();
+              get().fetchUnreadChats?.();
+            }
+            // Tell all pages to refetch their data
+            window.dispatchEvent(new Event('midashub:resumed'));
+          } else {
+            // Session gone — user needs to log in again
+            set({ user: null, profile: null });
+          }
+        } catch(e) {
+          // If getSession fails, just try heartbeat
+          supabase.from('profiles').update({ last_seen: new Date().toISOString() }).eq('id', currentUser.id).then(() => {});
         }
       });
     }

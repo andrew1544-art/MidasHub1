@@ -76,16 +76,14 @@ function FeedInner() {
     return () => window.removeEventListener('midashub:newpost', handler);
   }, [fetchPosts]);
 
-  // Refresh feed when returning from background (with safety)
+  // Refresh feed when returning from background (after auth is refreshed)
   useEffect(() => {
-    const onVisible = () => {
-      if (document.visibilityState !== 'visible') return;
+    const onResumed = () => {
       pageRef.current = 0;
-      const safety = setTimeout(() => setLoading(false), 3000);
-      fetchPosts(0).finally(() => clearTimeout(safety));
+      fetchPosts(0);
     };
-    document.addEventListener('visibilitychange', onVisible);
-    return () => document.removeEventListener('visibilitychange', onVisible);
+    window.addEventListener('midashub:resumed', onResumed);
+    return () => window.removeEventListener('midashub:resumed', onResumed);
   }, [fetchPosts]);
 
   // Realtime new posts — one channel, created once

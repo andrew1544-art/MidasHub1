@@ -13,34 +13,38 @@ export default function LeaderboardPage() {
   const [loading, setLoading] = useState(true);
   const [myRankPos, setMyRankPos] = useState(null);
 
+  const fetchLeaderboard = async () => {
+    try {
+      const supabase = createClient();
+      const { data } = await supabase.from('profiles')
+        .select('id, username, display_name, avatar_emoji, xp')
+        .order('xp', { ascending: false })
+        .limit(50);
+      setLeaders(data || []);
+      if (user && data) {
+        const pos = data.findIndex(p => p.id === user.id);
+        if (pos !== -1) setMyRankPos(pos + 1);
+        else {
+          const { count } = await supabase.from('profiles')
+            .select('*', { count: 'exact', head: true })
+            .gt('xp', profile?.xp || 0);
+          setMyRankPos((count || 0) + 1);
+        }
+      }
+    } catch (e) {}
+    setLoading(false);
+  };
+
   useEffect(() => {
     const safety = setTimeout(() => setLoading(false), 3000);
-    const fetch = async () => {
-      try {
-        const supabase = createClient();
-        const { data } = await supabase.from('profiles')
-          .select('id, username, display_name, avatar_emoji, xp')
-          .order('xp', { ascending: false })
-          .limit(50);
-        setLeaders(data || []);
-
-        // Find current user's position
-        if (user && data) {
-          const pos = data.findIndex(p => p.id === user.id);
-          if (pos !== -1) setMyRankPos(pos + 1);
-          else {
-            // User not in top 50 — get their position
-            const { count } = await supabase.from('profiles')
-              .select('*', { count: 'exact', head: true })
-              .gt('xp', profile?.xp || 0);
-            setMyRankPos((count || 0) + 1);
-          }
-        }
-      } catch (e) { console.error('Leaderboard error:', e); }
-      setLoading(false);
-    };
-    fetch().finally(() => clearTimeout(safety));
+    fetchLeaderboard().finally(() => clearTimeout(safety));
     return () => clearTimeout(safety);
+  }, [user, profile]);
+
+  useEffect(() => {
+    const onResumed = () => fetchLeaderboard();
+    window.addEventListener('midashub:resumed', onResumed);
+    return () => window.removeEventListener('midashub:resumed', onResumed);
   }, [user, profile]);
 
   const podiumMedals = ['🥇', '🥈', '🥉'];

@@ -43,6 +43,12 @@ export default function ViralPage() {
     return () => clearTimeout(safety);
   }, [fetchViral]);
 
+  useEffect(() => {
+    const onResumed = () => fetchViral();
+    window.addEventListener('midashub:resumed', onResumed);
+    return () => window.removeEventListener('midashub:resumed', onResumed);
+  }, [fetchViral]);
+
   const medals = ['🥇','🥈','🥉'];
 
   return (

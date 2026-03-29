@@ -150,6 +150,14 @@ function ChatInner() {
 
   useEffect(() => { const t = searchParams.get('user'); if (t && user && startedRef.current) startChat(t); }, [searchParams]);
 
+  // Reload conversations when app resumes from background
+  useEffect(() => {
+    if (!user) return;
+    const onResumed = () => loadConvos();
+    window.addEventListener('midashub:resumed', onResumed);
+    return () => window.removeEventListener('midashub:resumed', onResumed);
+  }, [user, loadConvos]);
+
   const loadTrades = async () => {
     if (!activeConvo) return;
     try { const { data } = await sb.from('trades').select('*').eq('conversation_id', activeConvo).order('created_at', { ascending: false }); setTrades(data||[]); } catch(e) {}
@@ -173,9 +181,8 @@ function ChatInner() {
         } catch(e) {}
       }).subscribe();
 
-    // When app returns from background, fetch any missed messages
-    const onVisible = async () => {
-      if (document.visibilityState !== 'visible') return;
+    // When app resumes (after auth refresh), catch up on missed messages
+    const onResumed = async () => {
       try {
         const lastMsg = msgsRef.current[msgsRef.current.length - 1];
         const since = lastMsg?.created_at || '1970-01-01';
@@ -185,7 +192,6 @@ function ChatInner() {
           const existingIds = new Set(msgsRef.current.map(m => m.id));
           const fresh = newMsgs.filter(m => !existingIds.has(m.id));
           if (fresh.length) {
-            // Also remove any optimistic messages that now have real versions
             msgsRef.current = [...msgsRef.current.filter(m => !String(m.id).startsWith('temp-')), ...fresh];
             setMessages([...msgsRef.current]);
             setTimeout(() => endRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
@@ -193,11 +199,11 @@ function ChatInner() {
         }
       } catch(e) {}
     };
-    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('midashub:resumed', onResumed);
 
     return () => {
       sb.removeChannel(ch);
-      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('midashub:resumed', onResumed);
     };
   }, [activeConvo]);
 
