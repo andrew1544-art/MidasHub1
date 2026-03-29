@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import AppShell from '@/components/AppShell';
+import AdminTradeChat from '@/components/AdminTradeChat';
 import { useStore } from '@/lib/store';
 import { createClient } from '@/lib/supabase-browser';
 import { timeAgo, formatCount } from '@/lib/constants';
@@ -23,6 +24,7 @@ export default function AdminPage() {
   const [editingCat, setEditingCat] = useState(null);
   const [newEscrow, setNewEscrow] = useState({ method_name: '', method_icon: '💰', details: '', currency: 'USD', is_active: true, display_order: 0 });
   const [newCat, setNewCat] = useState({ name: '', icon: '📦', description: '', requires_kyc: true, is_active: true });
+  const [viewingTrade, setViewingTrade] = useState(null);
   const supabase = createClient();
 
   // Admin check — fetch fresh from DB, don't rely on cached profile
@@ -224,7 +226,10 @@ export default function AdminPage() {
                           <div className="text-xs text-white/40">{t.seller?.display_name} → {t.buyer?.display_name} · {t.currency} {parseFloat(t.amount).toFixed(2)}</div>
                           {t.dispute_reason && <div className="text-xs text-red-300 mt-1">Reason: {t.dispute_reason}</div>}
                         </div>
-                        <button onClick={() => updateTradeStatus(t.id, 'resolved')} className="btn-primary py-1.5 px-3 text-[10px]">Resolve</button>
+                        <div className="flex gap-1.5 shrink-0">
+                          <button onClick={() => setViewingTrade(t)} className="text-[10px] px-2.5 py-1.5 rounded-lg bg-purple-500/15 text-purple-400">👁️ Chat</button>
+                          <button onClick={() => updateTradeStatus(t.id, 'resolved')} className="btn-primary py-1.5 px-3 text-[10px]">⚖️ Resolve</button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -240,7 +245,10 @@ export default function AdminPage() {
                           <div className="font-bold text-sm truncate">{t.title}</div>
                           <div className="text-xs text-white/40">Status: {t.status} · {t.currency} {parseFloat(t.amount).toFixed(2)}</div>
                         </div>
-                        <button onClick={async () => { await supabase.from('trades').update({ admin_note: 'Reviewed by admin' }).eq('id', t.id); loadAll(); }} className="btn-secondary py-1.5 px-3 text-[10px]">Mark Reviewed</button>
+                        <div className="flex gap-1.5 shrink-0">
+                          <button onClick={() => setViewingTrade(t)} className="text-[10px] px-2.5 py-1.5 rounded-lg bg-purple-500/15 text-purple-400">👁️ Chat</button>
+                          <button onClick={async () => { await supabase.from('trades').update({ admin_note: 'Reviewed by admin' }).eq('id', t.id); loadAll(); }} className="btn-secondary py-1.5 px-3 text-[10px]">Mark Reviewed</button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -328,17 +336,20 @@ export default function AdminPage() {
                         <div className="flex items-center gap-2 text-xs text-white/30 mt-0.5">
                           <span className="font-semibold" style={{ color: t.status === 'completed' ? '#22c55e' : t.status === 'disputed' ? '#ef4444' : '#f59e0b' }}>{t.status.toUpperCase()}</span>
                           <span>·</span><span>{t.currency} {parseFloat(t.amount).toFixed(2)}</span>
+                          <span>·</span><span>Fee: {t.currency} {(parseFloat(t.amount) * 0.02).toFixed(2)}</span>
                           <span>·</span><span>{timeAgo(t.created_at)}</span>
                         </div>
                         <div className="text-[10px] text-white/20 mt-1">🏪 {t.seller?.display_name || 'Seller'} → 🛒 {t.buyer?.display_name || 'Buyer'}</div>
-                        {t.escrow_payment_ref && <div className="text-[10px] text-green-400 mt-1">Payment ref: {t.escrow_payment_ref}</div>}
-                        {t.dispute_reason && <div className="text-[10px] text-red-300 mt-1">Dispute: {t.dispute_reason}</div>}
-                        {t.admin_note && <div className="text-[10px] text-blue-300 mt-1">Admin: {t.admin_note}</div>}
+                        {t.escrow_payment_ref && <div className="text-[10px] text-green-400 mt-1">💰 Payment ref: {t.escrow_payment_ref} {t.escrow_payment_method && `via ${t.escrow_payment_method}`}</div>}
+                        {t.dispute_reason && <div className="text-[10px] text-red-300 mt-1">⚠️ Dispute: {t.dispute_reason}</div>}
+                        {t.admin_note && <div className="text-[10px] text-blue-300 mt-1">📋 Admin: {t.admin_note}</div>}
+                        {t.delivery_estimate && <div className="text-[10px] text-white/20 mt-1">📦 Delivery: {t.delivery_estimate}</div>}
                       </div>
                       <div className="flex flex-col gap-1 shrink-0">
-                        {t.status === 'disputed' && <button onClick={() => updateTradeStatus(t.id, 'resolved')} className="text-[10px] px-2.5 py-1.5 rounded-lg bg-green-500/15 text-green-400">Resolve</button>}
+                        <button onClick={() => setViewingTrade(t)} className="text-[10px] px-2.5 py-1.5 rounded-lg bg-purple-500/15 text-purple-400 font-semibold">👁️ View Chat</button>
+                        {t.status === 'disputed' && <button onClick={() => updateTradeStatus(t.id, 'resolved')} className="text-[10px] px-2.5 py-1.5 rounded-lg bg-green-500/15 text-green-400">⚖️ Resolve</button>}
                         {!['completed','cancelled','resolved'].includes(t.status) && <button onClick={() => updateTradeStatus(t.id, 'cancelled')} className="text-[10px] px-2.5 py-1.5 rounded-lg bg-red-500/10 text-red-400">Cancel</button>}
-                        {t.status === 'paid' && <button onClick={() => { supabase.from('trades').update({ escrow_confirmed: true, admin_note: 'Payment verified by admin' }).eq('id', t.id); loadAll(); }} className="text-[10px] px-2.5 py-1.5 rounded-lg bg-blue-500/15 text-blue-400">Confirm Payment</button>}
+                        {t.status === 'paid' && <button onClick={() => { supabase.from('trades').update({ escrow_confirmed: true, admin_note: 'Payment verified by admin' }).eq('id', t.id); loadAll(); }} className="text-[10px] px-2.5 py-1.5 rounded-lg bg-blue-500/15 text-blue-400">✅ Confirm Pay</button>}
                       </div>
                     </div>
                   </div>
@@ -448,6 +459,9 @@ export default function AdminPage() {
             )}
           </>
         )}
+
+        {/* Trade Chat Viewer — always available from any tab */}
+        {viewingTrade && <AdminTradeChat trade={viewingTrade} onClose={() => { setViewingTrade(null); loadAll(); }} />}
       </div>
     </AppShell>
   );
