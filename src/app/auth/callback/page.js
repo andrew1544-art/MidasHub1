@@ -1,98 +1,64 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase-browser';
+import { Suspense } from 'react';
 
-export default function AuthCallback() {
+function CallbackInner() {
   const router = useRouter();
-  const [status, setStatus] = useState('verifying');
-  const [error, setError] = useState('');
+  const searchParams = useSearchParams();
+  const [status, setStatus] = useState('Processing...');
 
   useEffect(() => {
     const handleCallback = async () => {
       try {
         const supabase = createClient();
+        const type = searchParams.get('type');
 
-        // The hash fragment contains the token — Supabase client auto-handles it
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        // Handle the auth code exchange
+        const { data: { session }, error } = await supabase.auth.getSession();
 
-        if (sessionError) {
-          console.error('Callback error:', sessionError);
-          setError(sessionError.message);
-          setStatus('error');
+        if (type === 'recovery') {
+          // Password reset — redirect to app with reset mode
+          setStatus('Redirecting to reset password...');
+          // The session is set by Supabase from the recovery link
+          // Open the auth modal in reset mode
+          setTimeout(() => {
+            window.location.href = '/feed?reset=true';
+          }, 500);
           return;
         }
 
         if (session) {
-          setStatus('success');
-          setTimeout(() => router.push('/feed'), 1500);
+          setStatus('Logged in! Redirecting...');
+          setTimeout(() => router.push('/feed'), 500);
+        } else if (error) {
+          setStatus('Something went wrong. Redirecting...');
+          setTimeout(() => router.push('/?verified=true'), 2000);
         } else {
-          // No session yet — might need to exchange the code
-          const params = new URLSearchParams(window.location.search);
-          const code = params.get('code');
-
-          if (code) {
-            const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
-            if (exchangeError) {
-              console.error('Code exchange error:', exchangeError);
-              setStatus('verified');
-              setTimeout(() => router.push('/?verified=true'), 2000);
-            } else {
-              setStatus('success');
-              setTimeout(() => router.push('/feed'), 1500);
-            }
-          } else {
-            // Email verified but no auto-login — redirect to login
-            setStatus('verified');
-            setTimeout(() => router.push('/?verified=true'), 2000);
-          }
+          setStatus('Email verified! You can now log in.');
+          setTimeout(() => router.push('/?verified=true'), 2000);
         }
-      } catch (err) {
-        console.error('Callback exception:', err);
-        setStatus('verified');
-        setTimeout(() => router.push('/?verified=true'), 2000);
+      } catch (e) {
+        setStatus('Redirecting...');
+        setTimeout(() => router.push('/'), 2000);
       }
     };
 
     handleCallback();
-  }, [router]);
+  }, [router, searchParams]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4" style={{ background: 'var(--bg, #0a0a0f)' }}>
-      <div className="text-center max-w-sm">
-        {status === 'verifying' && (
-          <>
-            <div className="text-6xl mb-4 animate-pulse">⚡</div>
-            <h2 className="text-2xl font-bold mb-2" style={{ color: '#FFD700' }}>Verifying your email...</h2>
-            <p className="text-white/40 text-sm">Hold tight, we&apos;re setting up your account</p>
-          </>
-        )}
-        {status === 'success' && (
-          <>
-            <div className="text-6xl mb-4">🎉</div>
-            <h2 className="text-2xl font-bold text-green-400 mb-2">You&apos;re in!</h2>
-            <p className="text-white/40 text-sm">Email verified. Redirecting to your feed...</p>
-          </>
-        )}
-        {status === 'verified' && (
-          <>
-            <div className="text-6xl mb-4">✅</div>
-            <h2 className="text-2xl font-bold text-green-400 mb-2">Email Verified!</h2>
-            <p className="text-white/40 text-sm">Your account is ready. Redirecting to login...</p>
-          </>
-        )}
-        {status === 'error' && (
-          <>
-            <div className="text-6xl mb-4">⚠️</div>
-            <h2 className="text-2xl font-bold text-red-400 mb-2">Something went wrong</h2>
-            <p className="text-white/40 text-sm mb-4">{error || 'Please try logging in manually.'}</p>
-            <button onClick={() => router.push('/')} className="px-6 py-3 rounded-xl font-semibold text-sm"
-              style={{ background: 'linear-gradient(135deg, #FFD700, #FFA500)', color: '#000' }}>
-              Go to MidasHub →
-            </button>
-          </>
-        )}
+    <div className="min-h-screen flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #0a0a0f, #1a0a2e, #0d1b2a)' }}>
+      <div className="text-center">
+        <div className="text-6xl mb-4 animate-pulse">⚡</div>
+        <div className="text-xl font-bold text-white mb-2">{status}</div>
+        <div className="text-white/30 text-sm">Please wait...</div>
       </div>
     </div>
   );
+}
+
+export default function AuthCallbackPage() {
+  return <Suspense fallback={<div className="min-h-screen flex items-center justify-center" style={{ background: '#0a0a0f' }}><div className="text-4xl animate-pulse">⚡</div></div>}><CallbackInner /></Suspense>;
 }

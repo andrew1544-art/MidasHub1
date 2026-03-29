@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useSearchParams } from 'next/navigation';
 import AppShell from '@/components/AppShell';
 import PostCard from '@/components/PostCard';
 import { useStore } from '@/lib/store';
@@ -8,6 +9,7 @@ import { PLATFORM_LIST } from '@/lib/constants';
 
 export default function FeedPage() {
   const { user, profile, setShowAuth, setShowCompose } = useStore();
+  const searchParams = useSearchParams();
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
@@ -52,6 +54,15 @@ export default function FeedPage() {
 
   // Load on filter change
   useEffect(() => { setLoading(true); pageRef.current = 0; fetchPosts(0); }, [filter, fetchPosts]);
+
+  // Detect password reset redirect
+  useEffect(() => {
+    if (searchParams.get('reset') === 'true' && user) {
+      setShowAuth(true, 'reset');
+      // Clean URL
+      window.history.replaceState({}, '', '/feed');
+    }
+  }, [searchParams, user]);
 
   // Listen for new posts from compose
   useEffect(() => {
