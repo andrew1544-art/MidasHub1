@@ -10,6 +10,7 @@ import { createClient } from '@/lib/supabase-browser';
 import { timeAgo } from '@/lib/constants';
 import { playMessageSound } from '@/lib/sounds';
 import { compressImage, checkVideoSize } from '@/lib/media';
+import { sendMessagePush } from '@/lib/notifications';
 import { InlineBadges } from '@/components/Badge';
 
 function parseMedia(msg) {
@@ -220,6 +221,8 @@ function ChatInner() {
     setTimeout(() => endRef.current?.scrollIntoView({ behavior: 'smooth' }), 30);
     try {
       await sb.from('messages').insert({ conversation_id: activeConvo, sender_id: user.id, content: msg });
+      // Push notification to other user (works even when app closed)
+      if (otherUser?.id) sendMessagePush(otherUser.id, profile?.display_name || 'Someone', msg);
     } catch(e) { showToast?.('Failed to send'); }
     setSending(false);
   };
@@ -241,6 +244,7 @@ function ChatInner() {
       const { data: u } = sb.storage.from('media').getPublicUrl(data.path);
       const isVid = file.type.startsWith('video/');
       await sb.from('messages').insert({ conversation_id: activeConvo, sender_id: user.id, content: isVid ? '🎬 Video' : '📷 Photo', media_url: u.publicUrl, media_type: isVid ? 'video' : 'image' });
+      if (otherUser?.id) sendMessagePush(otherUser.id, profile?.display_name || 'Someone', isVid ? '🎬 Sent a video' : '📷 Sent a photo');
     } catch(e) { showToast?.('Upload failed'); }
     setUploading(false);
   };

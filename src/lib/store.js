@@ -6,6 +6,47 @@ function getSupabase() {
   return createClient();
 }
 
+const VAPID_PUBLIC = 'BEUwvEX0AosCeqokhBC04Mjp17WryT_DEnG_aPwBWaqZ1ENQmQGRHADql_P40bVX3OeRAiyev8_3ww4eDQUb-_o';
+
+// Register for push notifications (non-blocking, silent)
+async function registerPush(userId) {
+  try {
+    if (typeof window === 'undefined' || !('serviceWorker' in navigator) || !('PushManager' in window)) return;
+    // Ask permission
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted') return;
+    // Get SW registration
+    const reg = await navigator.serviceWorker.ready;
+    // Subscribe
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC),
+      });
+    }
+    // Send to server
+    const subJson = sub.toJSON();
+    await fetch('/api/push', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId,
+        subscription: { endpoint: sub.endpoint, keys: { p256dh: subJson.keys.p256dh, auth: subJson.keys.auth } },
+      }),
+    });
+  } catch(e) { /* Silent fail — push is optional */ }
+}
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(base64);
+  const arr = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+  return arr;
+}
+
 function friendlyError(msg) {
   if (!msg) return 'Something went wrong. Try again.';
   const m = msg.toLowerCase();
@@ -79,6 +120,7 @@ export const useStore = create((set, get) => ({
         clearTimeout(safetyTimeout);
         // Background tasks - don't block UI
         requestNotifPermission();
+        registerPush(session.user.id);
         startHeartbeat(supabase, session.user.id);
         awardDailyLogin(supabase, session.user.id, set);
       } else {
@@ -98,6 +140,7 @@ export const useStore = create((set, get) => ({
             const profile = await loadProfile(supabase, session.user.id);
             set({ user: session.user, profile, loading: false });
             startHeartbeat(supabase, session.user.id);
+            if (event === 'SIGNED_IN') registerPush(session.user.id);
           }
         } else if (event === 'SIGNED_OUT') {
           set({ user: null, profile: null });
