@@ -7,6 +7,7 @@ import { sendNotification } from '@/lib/notifications';
 import { PLATFORMS, formatCount, timeAgo } from '@/lib/constants';
 import { RankBadge } from '@/components/RankBadge';
 import MediaViewer from '@/components/MediaViewer';
+import EditPostModal from '@/components/EditPostModal';
 
 function CommentItem({ comment, postOwnerId, onDelete }) {
   const { user, showToast } = useStore();
@@ -101,10 +102,12 @@ export default function PostCard({ post, onPostUpdated }) {
   const [showShareMenu, setShowShareMenu] = useState(false);
   const [showOptions, setShowOptions] = useState(false);
   const [loadingComments, setLoadingComments] = useState(false);
-  const [editing, setEditing] = useState(false);
-  const [editContent, setEditContent] = useState(post.content);
+  const [editModalOpen, setEditModalOpen] = useState(false);
   const [displayContent, setDisplayContent] = useState(post.content);
-  const [savingEdit, setSavingEdit] = useState(false);
+  const [displayMedia, setDisplayMedia] = useState(post.media_urls || []);
+  const [displayTags, setDisplayTags] = useState(post.tags || []);
+  const [displayPublic, setDisplayPublic] = useState(post.is_public !== false);
+  const [displayPlatform, setDisplayPlatform] = useState(post.source_platform);
   const [showRepostMenu, setShowRepostMenu] = useState(false);
   const [viewerOpen, setViewerOpen] = useState(false);
   const [viewerIndex, setViewerIndex] = useState(0);
@@ -112,7 +115,7 @@ export default function PostCard({ post, onPostUpdated }) {
   const shareRef = useRef(null);
   const repostRef = useRef(null);
 
-  const plat = PLATFORMS[post.source_platform] || PLATFORMS.midashub;
+  const plat = PLATFORMS[displayPlatform] || PLATFORMS.midashub;
   const postUser = post.profiles || {};
   const isOwner = user?.id === post.user_id;
 
@@ -211,16 +214,9 @@ export default function PostCard({ post, onPostUpdated }) {
     } catch (e) { setCommentText(text); }
   };
 
-  const saveEdit = async () => {
-    if (!editContent.trim() || savingEdit) return;
-    setSavingEdit(true);
-    try {
-      const supabase = createClient();
-      const { error } = await supabase.from('posts').update({ content: editContent.trim(), updated_at: new Date().toISOString() }).eq('id', post.id);
-      if (!error) { setDisplayContent(editContent.trim()); setEditing(false); showToast?.('Post updated ✓'); onPostUpdated?.(); }
-      else showToast?.('Failed to update');
-    } catch (e) { showToast?.('Error updating'); }
-    setSavingEdit(false);
+  const handleEditSaved = () => {
+    // Refresh the post data from parent
+    onPostUpdated?.();
   };
 
   const deletePost = async () => {
@@ -259,7 +255,7 @@ export default function PostCard({ post, onPostUpdated }) {
             <span className="platform-pill text-[10px] py-0.5" style={{ background: `${plat.color}18`, color: plat.color }}>{plat.icon} via {plat.name}</span>
             <span className="text-[11px] text-white/20">{timeAgo(post.created_at)}</span>
             {post.updated_at && post.updated_at !== post.created_at && <span className="text-[10px] text-white/15 italic">edited</span>}
-            {isOwner && <span className="text-[10px] text-white/15">{post.is_public === false ? '🔒' : '🌍'}</span>}
+            {isOwner && <span className="text-[10px] text-white/15">{displayPublic === false ? '🔒' : '🌍'}</span>}
           </div>
         </div>
         <div className="relative" ref={optionsRef}>
@@ -267,7 +263,7 @@ export default function PostCard({ post, onPostUpdated }) {
           {showOptions && (
             <div className="absolute top-9 right-0 glass rounded-xl p-1.5 w-44 shadow-2xl z-20">
               {isOwner && <>
-                <button onClick={() => { setEditing(true); setEditContent(displayContent); setShowOptions(false); }} className="w-full flex items-center gap-2 px-3 py-2.5 rounded-lg hover:bg-white/5 text-sm text-left">✏️ Edit post</button>
+                <button onClick={() => { setEditModalOpen(true); setShowOptions(false); }} className="w-full flex items-center gap-2 px-3 py-2.5 rounded-lg hover:bg-white/5 text-sm text-left">✏️ Edit post</button>
                 <button onClick={() => { deletePost(); setShowOptions(false); }} className="w-full flex items-center gap-2 px-3 py-2.5 rounded-lg hover:bg-red-500/10 text-red-400 text-sm text-left">🗑️ Delete post</button>
               </>}
               {post.source_url && <a href={post.source_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-3 py-2.5 rounded-lg hover:bg-white/5 text-sm">🔗 View original</a>}
@@ -277,24 +273,15 @@ export default function PostCard({ post, onPostUpdated }) {
         </div>
       </div>
 
-      {editing ? (
-        <div className="mb-3">
-          <textarea value={editContent} onChange={e => setEditContent(e.target.value)} className="w-full h-24 p-3 rounded-xl bg-white/5 border border-[var(--accent)] text-white text-sm resize-none outline-none leading-relaxed" autoFocus style={{ fontSize: '16px' }} />
-          <div className="flex gap-2 mt-2">
-            <button onClick={saveEdit} disabled={savingEdit || !editContent.trim()} className="btn-primary py-2 px-4 text-xs disabled:opacity-40">{savingEdit ? '⏳ Saving...' : '✓ Save'}</button>
-            <button onClick={() => setEditing(false)} className="btn-secondary py-2 px-4 text-xs">Cancel</button>
-          </div>
-        </div>
-      ) : (
-        <p className="text-[15px] leading-relaxed whitespace-pre-wrap break-words">{displayContent}</p>
-      )}
+      {/* Content */}
+      <p className="text-[15px] leading-relaxed whitespace-pre-wrap break-words">{displayContent}</p>
 
-      {post.tags?.length > 0 && <div className="flex flex-wrap gap-1.5 mt-2">{post.tags.map(tag => <span key={tag} className="text-xs text-[var(--accent)] opacity-70">#{tag}</span>)}</div>}
+      {displayTags.length > 0 && <div className="flex flex-wrap gap-1.5 mt-2">{displayTags.map(tag => <span key={tag} className="text-xs text-[var(--accent)] opacity-70">#{tag}</span>)}</div>}
 
-      {post.media_urls?.length > 0 && (
+      {displayMedia.length > 0 && (
         <>
-          <div className={`grid gap-1.5 mt-3 rounded-xl overflow-hidden ${post.media_urls.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}`}>
-            {post.media_urls.map((url, i) => {
+          <div className={`grid gap-1.5 mt-3 rounded-xl overflow-hidden ${displayMedia.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}`}>
+            {displayMedia.map((url, i) => {
               const isVid = /\.(mp4|webm|mov|avi|ogg)$/i.test(url) || post.media_type === 'video';
               return (
                 <div key={i} className="aspect-video bg-white/5 rounded-xl overflow-hidden relative cursor-pointer group"
@@ -315,7 +302,7 @@ export default function PostCard({ post, onPostUpdated }) {
           </div>
           {viewerOpen && (
             <MediaViewer
-              media={post.media_urls.map(url => ({
+              media={displayMedia.map(url => ({
                 url,
                 type: /\.(mp4|webm|mov|avi|ogg)$/i.test(url) || post.media_type === 'video' ? 'video' : 'image',
               }))}
@@ -368,6 +355,15 @@ export default function PostCard({ post, onPostUpdated }) {
             <div className="text-center py-2"><button onClick={() => useStore.getState().setShowAuth(true)} className="text-xs text-[var(--accent)] hover:underline">Log in to comment</button></div>
           )}
         </div>
+      )}
+
+      {/* Edit Post Modal */}
+      {editModalOpen && (
+        <EditPostModal
+          post={{ ...post, content: displayContent, media_urls: displayMedia, tags: displayTags, is_public: displayPublic, source_platform: displayPlatform }}
+          onClose={() => setEditModalOpen(false)}
+          onSaved={handleEditSaved}
+        />
       )}
     </article>
   );
