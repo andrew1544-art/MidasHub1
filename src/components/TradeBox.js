@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useStore } from '@/lib/store';
 import { createClient } from '@/lib/supabase-browser';
-import { sendNotification } from '@/lib/notifications';
+import { sendNotification, alertAdmins } from '@/lib/notifications';
 import { timeAgo } from '@/lib/constants';
 
 const STATUS_CONFIG = {
@@ -41,7 +41,9 @@ function KYCForm({ onComplete }) {
       if (idPhoto) { const p = `kyc/${user.id}/id-${Date.now()}.${idPhoto.name.split('.').pop()}`; const { data } = await sb.storage.from('media').upload(p, idPhoto); if (data) { const { data: u } = sb.storage.from('media').getPublicUrl(data.path); idUrl = u.publicUrl; } }
       if (selfie) { const p = `kyc/${user.id}/self-${Date.now()}.${selfie.name.split('.').pop()}`; const { data } = await sb.storage.from('media').upload(p, selfie); if (data) { const { data: u } = sb.storage.from('media').getPublicUrl(data.path); selfUrl = u.publicUrl; } }
       await updateProfile({ ...form, kyc_id_photo_url: idUrl, kyc_selfie_url: selfUrl, kyc_status: 'pending', kyc_submitted_at: new Date().toISOString() });
-      showToast?.('Identity submitted ✓'); onComplete?.();
+      showToast?.('Identity submitted ✓');
+      alertAdmins({ fromUserId: user.id, type: 'system', content: `🛡️ New KYC submission from ${profile?.display_name || 'a user'} — review needed` });
+      onComplete?.();
     } catch(e) { setError('Failed'); } setSaving(false);
   };
   if (profile?.kyc_status==='verified') { onComplete?.(); return null; }
@@ -237,7 +239,9 @@ export function StartTradeButton({ conversationId, otherUserId, onTradeCreated }
       await sb.from('trade_messages').insert({trade_id:data.id,content:`🔒 Trade: "${form.title}" for ${form.currency} ${parseFloat(form.amount).toFixed(2)} (+2% escrow)\n📦 Delivery: ${delivery}\nWaiting for ${role==='seller'?'buyer':'seller'} to accept.`,is_system:true});
       sendNotification({toUserId:otherUserId,fromUserId:user.id,type:'system',content:`wants to trade: "${form.title}" — ${form.currency} ${parseFloat(form.amount).toFixed(2)}`});
       setOpen(false);setForm({title:'',description:'',amount:'',currency:'USD',paymentMethod:'',categoryId:''});setRole(null);setDeliveryEst('');
-      showToast?.('Trade created ✓');onTradeCreated?.();
+      showToast?.('Trade created ✓');
+      alertAdmins({ fromUserId: user.id, type: 'system', content: `🔒 New trade: "${form.title}" — ${form.currency} ${parseFloat(form.amount).toFixed(2)} (fee: ${form.currency} ${(parseFloat(form.amount)*0.02).toFixed(2)})`, referenceId: data.id });
+      onTradeCreated?.();
     }catch(e){setError('Failed');}setCreating(false);
   };
 
@@ -317,6 +321,10 @@ export function TradeCard({ trade, onUpdate }) {
       const other=isSeller?trade.buyer_id:trade.seller_id;
       const msgs={accepted:'accepted 🤝',paid:'paid 💰',delivered:'delivered 📦',completed:'confirmed 🎉',disputed:'disputed ⚠️',cancelled:'cancelled'};
       sendNotification({toUserId:other,fromUserId:user.id,type:'system',content:`Trade "${trade.title}": ${msgs[newStatus]||newStatus}`});
+      // Alert admins on important status changes
+      if (['disputed','paid','completed'].includes(newStatus)) {
+        alertAdmins({ fromUserId: user.id, type: 'system', content: `🔒 Trade "${trade.title}" → ${newStatus.toUpperCase()} (${trade.currency} ${parseFloat(trade.amount).toFixed(2)})`, referenceId: trade.id });
+      }
       onUpdate?.();
     }catch(e){showToast?.('Failed');}setLoading(false);
   };
