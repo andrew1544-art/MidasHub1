@@ -40,9 +40,32 @@ export default function RootLayout({ children }) {
       <body className="antialiased">
         {children}
         <script dangerouslySetInnerHTML={{ __html: `
+          // Auto-clear ALL caches on every load — always fresh
+          if ('caches' in window) {
+            caches.keys().then(function(keys) {
+              keys.forEach(function(k) { caches.delete(k); });
+            });
+          }
+          // Register SW with force update
           if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-              navigator.serviceWorker.register('/sw.js').catch(() => {});
+            navigator.serviceWorker.register('/sw.js').then(function(reg) {
+              // Force check for new SW immediately
+              reg.update();
+              // If new SW found, activate it right away
+              reg.addEventListener('updatefound', function() {
+                var nw = reg.installing;
+                if (nw) {
+                  nw.addEventListener('statechange', function() {
+                    if (nw.state === 'activated') {
+                      // New SW active — reload silently if needed
+                    }
+                  });
+                }
+              });
+            }).catch(function() {});
+            // Tell any waiting SW to take over NOW
+            navigator.serviceWorker.ready.then(function(reg) {
+              if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
             });
           }
         `}} />
