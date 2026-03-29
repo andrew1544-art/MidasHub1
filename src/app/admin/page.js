@@ -25,58 +25,78 @@ export default function AdminPage() {
   const [newCat, setNewCat] = useState({ name: '', icon: '📦', description: '', requires_kyc: true, is_active: true });
   const supabase = createClient();
 
-  // Admin check — from database, not code
-  const isAdmin = profile?.is_admin === true;
+  // Admin check — fetch fresh from DB, don't rely on cached profile
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [adminChecked, setAdminChecked] = useState(false);
 
   useEffect(() => {
-    if (!isAdmin) { setLoading(false); return; }
+    if (!user) { setAdminChecked(true); setLoading(false); return; }
+    // Always re-fetch profile to check is_admin
+    (async () => {
+      try {
+        const { data } = await supabase.from('profiles').select('is_admin').eq('id', user.id).maybeSingle();
+        setIsAdmin(data?.is_admin === true);
+      } catch (e) { setIsAdmin(false); }
+      setAdminChecked(true);
+    })();
+  }, [user]);
+
+  useEffect(() => {
+    if (!adminChecked || !isAdmin) return;
     loadAll();
-  }, [isAdmin, tab]);
+  }, [isAdmin, adminChecked, tab]);
 
   const loadAll = async () => {
     setLoading(true);
     try {
-      // Stats
-      const [usersR, postsR, tradesR, msgsR, notifsR] = await Promise.all([
-        supabase.from('profiles').select('*', { count: 'exact', head: true }),
-        supabase.from('posts').select('*', { count: 'exact', head: true }),
-        supabase.from('trades').select('*', { count: 'exact', head: true }).catch(() => ({ count: 0 })),
-        supabase.from('messages').select('*', { count: 'exact', head: true }),
-        supabase.from('notifications').select('*', { count: 'exact', head: true }),
-      ]);
+      // Stats — each in try/catch so one failure doesn't break all
+      let userCount = 0, postCount = 0, tradeCount = 0, msgCount = 0, notifCount = 0;
       let activeTrades = 0, completedTrades = 0, disputedTrades = 0;
-      try {
-        const { count: at } = await supabase.from('trades').select('*', { count: 'exact', head: true }).in('status', ['pending','accepted','paid','delivered']);
-        const { count: ct } = await supabase.from('trades').select('*', { count: 'exact', head: true }).eq('status', 'completed');
-        const { count: dt } = await supabase.from('trades').select('*', { count: 'exact', head: true }).eq('status', 'disputed');
-        activeTrades = at || 0; completedTrades = ct || 0; disputedTrades = dt || 0;
-      } catch (e) {}
-      setStats({ users: usersR.count || 0, posts: postsR.count || 0, trades: tradesR.count || 0, messages: msgsR.count || 0, notifications: notifsR.count || 0, activeTrades, completedTrades, disputedTrades });
 
-      // Load tab-specific data
+      try { const { count } = await supabase.from('profiles').select('*', { count: 'exact', head: true }); userCount = count || 0; } catch(e){}
+      try { const { count } = await supabase.from('posts').select('*', { count: 'exact', head: true }); postCount = count || 0; } catch(e){}
+      try { const { count } = await supabase.from('messages').select('*', { count: 'exact', head: true }); msgCount = count || 0; } catch(e){}
+      try { const { count } = await supabase.from('notifications').select('*', { count: 'exact', head: true }); notifCount = count || 0; } catch(e){}
+      try {
+        const { count: tc } = await supabase.from('trades').select('*', { count: 'exact', head: true }); tradeCount = tc || 0;
+        const { count: at } = await supabase.from('trades').select('*', { count: 'exact', head: true }).in('status', ['pending','accepted','paid','delivered']); activeTrades = at || 0;
+        const { count: ct } = await supabase.from('trades').select('*', { count: 'exact', head: true }).eq('status', 'completed'); completedTrades = ct || 0;
+        const { count: dt } = await supabase.from('trades').select('*', { count: 'exact', head: true }).eq('status', 'disputed'); disputedTrades = dt || 0;
+      } catch(e){}
+
+      setStats({ users: userCount, posts: postCount, trades: tradeCount, messages: msgCount, notifications: notifCount, activeTrades, completedTrades, disputedTrades });
+
+      // Load tab-specific data — each wrapped safely
       if (tab === 'users' || tab === 'dashboard') {
-        const { data } = await supabase.from('profiles').select('*').order('created_at', { ascending: false }).limit(100);
-        setUsers(data || []);
+        try { const { data } = await supabase.from('profiles').select('*').order('created_at', { ascending: false }).limit(100); setUsers(data || []); } catch(e) { setUsers([]); }
       }
       if (tab === 'trades' || tab === 'dashboard') {
         try {
-          const { data } = await supabase.from('trades').select('*, seller:profiles!trades_seller_id_fkey(*), buyer:profiles!trades_buyer_id_fkey(*)').order('created_at', { ascending: false }).limit(100);
-          setTrades(data || []);
-        } catch (e) { setTrades([]); }
+          const { data, error } = await supabase.from('trades').select('*').order('created_at', { ascending: false }).limit(100);
+          if (error) throw error;
+          // Manually fetch seller/buyer profiles
+          const enriched = [];
+          for (const t of (data || [])) {
+            const [{ data: seller }, { data: buyer }] = await Promise.all([
+              supabase.from('profiles').select('id, username, display_name, avatar_emoji').eq('id', t.seller_id).maybeSingle(),
+              supabase.from('profiles').select('id, username, display_name, avatar_emoji').eq('id', t.buyer_id).maybeSingle(),
+            ]);
+            enriched.push({ ...t, seller, buyer });
+          }
+          setTrades(enriched);
+        } catch (e) { console.warn('Trades load:', e); setTrades([]); }
       }
       if (tab === 'escrow') {
-        try { const { data } = await supabase.from('escrow_settings').select('*').order('display_order'); setEscrowMethods(data || []); } catch (e) {}
+        try { const { data } = await supabase.from('escrow_settings').select('*').order('display_order'); setEscrowMethods(data || []); } catch(e) { setEscrowMethods([]); }
       }
       if (tab === 'categories') {
-        try { const { data } = await supabase.from('trade_categories').select('*').order('name'); setCategories(data || []); } catch (e) {}
+        try { const { data } = await supabase.from('trade_categories').select('*').order('name'); setCategories(data || []); } catch(e) { setCategories([]); }
       }
       if (tab === 'kyc') {
-        const { data } = await supabase.from('profiles').select('*').eq('kyc_status', 'pending').order('kyc_submitted_at', { ascending: false });
-        setKycQueue(data || []);
+        try { const { data } = await supabase.from('profiles').select('*').eq('kyc_status', 'pending').order('kyc_submitted_at', { ascending: false }); setKycQueue(data || []); } catch(e) { setKycQueue([]); }
       }
       if (tab === 'posts') {
-        const { data } = await supabase.from('posts').select('*, profiles(*)').order('created_at', { ascending: false }).limit(100);
-        setPosts(data || []);
+        try { const { data } = await supabase.from('posts').select('*, profiles(*)').order('created_at', { ascending: false }).limit(100); setPosts(data || []); } catch(e) { setPosts([]); }
       }
     } catch (e) { console.error('Admin load error:', e); }
     setLoading(false);
@@ -141,7 +161,8 @@ export default function AdminPage() {
   };
 
   if (!user) return <AppShell><div className="max-w-2xl mx-auto px-4 py-20 text-center"><div className="text-6xl mb-4">🔐</div><h2 className="text-2xl font-bold">Admin Access Required</h2><p className="text-white/30 mt-2">Log in to access the admin panel</p></div></AppShell>;
-  if (!isAdmin) return <AppShell><div className="max-w-2xl mx-auto px-4 py-20 text-center"><div className="text-6xl mb-4">🚫</div><h2 className="text-2xl font-bold">Access Denied</h2><p className="text-white/30 mt-2 text-sm">You don&apos;t have admin access.</p><p className="text-white/15 text-xs mt-3">Contact the site owner if you need access.</p></div></AppShell>;
+  if (!adminChecked) return <AppShell><div className="max-w-2xl mx-auto px-4 py-20 text-center"><div className="text-4xl animate-pulse">⚡</div></div></AppShell>;
+  if (!isAdmin) return <AppShell><div className="max-w-2xl mx-auto px-4 py-20 text-center"><div className="text-6xl mb-4">🚫</div><h2 className="text-2xl font-bold">Access Denied</h2><p className="text-white/30 mt-2 text-sm">You don&apos;t have admin access.</p></div></AppShell>;
 
   const tabs = [
     { key: 'dashboard', label: '📊 Dashboard' },
