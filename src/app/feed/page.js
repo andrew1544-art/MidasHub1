@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { Suspense, useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import AppShell from '@/components/AppShell';
 import PostCard from '@/components/PostCard';
@@ -7,7 +7,7 @@ import { useStore } from '@/lib/store';
 import { createClient } from '@/lib/supabase-browser';
 import { PLATFORM_LIST } from '@/lib/constants';
 
-export default function FeedPage() {
+function FeedInner() {
   const { user, profile, setShowAuth, setShowCompose } = useStore();
   const searchParams = useSearchParams();
   const [posts, setPosts] = useState([]);
@@ -190,4 +190,8 @@ export default function FeedPage() {
       </div>
     </AppShell>
   );
+}
+
+export default function FeedPage() {
+  return <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="text-4xl animate-pulse">⚡</div></div>}><FeedInner /></Suspense>;
 }
