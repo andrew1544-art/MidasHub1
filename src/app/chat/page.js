@@ -88,15 +88,25 @@ function ChatInner() {
     }
 
     // Load messages + trades in parallel
-    const [msgsRes, tradesRes] = await Promise.all([
-      sb.from('messages').select('*, profiles(id, display_name, avatar_emoji)').eq('conversation_id', convoId).order('created_at', { ascending: true }).limit(200),
-      sb.from('trades').select('*').eq('conversation_id', convoId).order('created_at', { ascending: false }).catch(() => ({ data: [] })),
-    ]);
-    const msgs = msgsRes.data || [];
+    let msgs = [], tradeData = [];
+    try {
+      const [msgsRes, tradesRes] = await Promise.all([
+        sb.from('messages').select('*, profiles(id, display_name, avatar_emoji)').eq('conversation_id', convoId).order('created_at', { ascending: true }).limit(200),
+        sb.from('trades').select('*').eq('conversation_id', convoId).order('created_at', { ascending: false }),
+      ]);
+      msgs = msgsRes.data || [];
+      tradeData = tradesRes.data || [];
+    } catch(e) {
+      // If trades table doesn't exist yet, just load messages
+      try {
+        const { data } = await sb.from('messages').select('*, profiles(id, display_name, avatar_emoji)').eq('conversation_id', convoId).order('created_at', { ascending: true }).limit(200);
+        msgs = data || [];
+      } catch(e2) {}
+    }
     setMessages(msgs);
     msgsRef.current = msgs;
-    setTrades(tradesRes.data || []);
-    if ((tradesRes.data||[]).some(t => !['completed','cancelled','resolved'].includes(t.status))) setShowTrades(true);
+    setTrades(tradeData);
+    if (tradeData.some(t => !['completed','cancelled','resolved'].includes(t.status))) setShowTrades(true);
     else setShowTrades(false);
 
     // Mark as read (don't await — fire and forget)
