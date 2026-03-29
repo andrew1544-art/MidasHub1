@@ -82,7 +82,10 @@ export default function PeoplePage() {
         <div className="text-5xl mb-3 group-hover:scale-110 transition-transform inline-block">{person.avatar_emoji || '😎'}</div>
         <div className="font-bold text-sm truncate">{person.display_name}</div>
         <div className="text-xs text-white/25 truncate mt-0.5">@{person.username}</div>
-        <div className="flex justify-center mt-1.5"><RankBadge xp={person.xp || 0} size="xs" /></div>
+        <div className="flex justify-center gap-1.5 mt-1.5">
+          <RankBadge xp={person.xp || 0} size="xs" />
+          {person.trade_count >= 2 && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-green-500/15 text-green-400 font-bold">✅</span>}
+        </div>
       </Link>
       {person.bio && <div className="text-xs text-white/35 mt-2 line-clamp-2 leading-relaxed">{person.bio}</div>}
       {person.location && <div className="text-[11px] text-white/15 mt-1.5">📍 {person.location}</div>}

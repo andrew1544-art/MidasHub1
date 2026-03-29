@@ -251,6 +251,7 @@ export default function PostCard({ post, onPostUpdated }) {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 flex-wrap">
             <Link href={`/profile/${postUser.username || 'unknown'}`} className="font-bold text-sm hover:underline truncate">{postUser.display_name || 'User'}</Link>
+            {postUser.trade_count >= 2 && <span className="text-xs" title="Verified Trader">✅</span>}
             <RankBadge xp={postUser.xp || 0} size="xs" />
             <span className="text-xs text-white/25 truncate">@{postUser.username || 'user'}</span>
           </div>

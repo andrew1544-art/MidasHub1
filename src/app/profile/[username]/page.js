@@ -102,8 +102,11 @@ export default function ProfilePage() {
             <div className="text-6xl sm:text-7xl mb-3">{prof.avatar_emoji || '😎'}</div>
             <h1 className="text-2xl font-black">{prof.display_name}</h1>
             <p className="text-white/30 text-sm">@{prof.username}</p>
-            <div className="flex justify-center mt-2">
+            <div className="flex justify-center gap-2 mt-2">
               <RankBadge xp={prof.xp || 0} size="md" />
+              {prof.trade_count >= 2 && (
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-green-500/15 text-green-400 text-xs font-bold border border-green-500/30">✅ Verified Trader</span>
+              )}
             </div>
             {prof.bio && <p className="text-white/50 text-sm mt-3 max-w-sm mx-auto leading-relaxed">{prof.bio}</p>}
             {prof.location && <p className="text-white/20 text-xs mt-2">📍 {prof.location}</p>}
