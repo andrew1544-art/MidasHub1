@@ -53,13 +53,18 @@ function FeedInner() {
   }, [filter, user]);
 
   // Load on filter change
-  useEffect(() => { setLoading(true); pageRef.current = 0; fetchPosts(0); }, [filter, fetchPosts]);
+  // Load posts with safety timeout
+  useEffect(() => {
+    setLoading(true); pageRef.current = 0;
+    const safety = setTimeout(() => setLoading(false), 3000);
+    fetchPosts(0).finally(() => clearTimeout(safety));
+    return () => clearTimeout(safety);
+  }, [filter, fetchPosts]);
 
   // Detect password reset redirect
   useEffect(() => {
     if (searchParams.get('reset') === 'true' && user) {
       setShowAuth(true, 'reset');
-      // Clean URL
       window.history.replaceState({}, '', '/feed');
     }
   }, [searchParams, user]);
@@ -71,9 +76,14 @@ function FeedInner() {
     return () => window.removeEventListener('midashub:newpost', handler);
   }, [fetchPosts]);
 
-  // Refresh feed when returning from background
+  // Refresh feed when returning from background (with safety)
   useEffect(() => {
-    const onVisible = () => { if (document.visibilityState === 'visible') { pageRef.current = 0; fetchPosts(0); } };
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible') return;
+      pageRef.current = 0;
+      const safety = setTimeout(() => setLoading(false), 3000);
+      fetchPosts(0).finally(() => clearTimeout(safety));
+    };
     document.addEventListener('visibilitychange', onVisible);
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, [fetchPosts]);

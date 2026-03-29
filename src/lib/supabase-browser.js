@@ -1,4 +1,4 @@
-import { createClient as createSupabaseClient } from '@supabase/supabase-js';
+import { createBrowserClient } from '@supabase/ssr';
 
 let client = null;
 
@@ -9,25 +9,14 @@ export function createClient() {
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!url || !key || url === 'your_supabase_project_url') {
-    return createSupabaseClient(
+    return createBrowserClient(
       'https://placeholder.supabase.co',
       'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.placeholder'
     );
   }
 
-  client = createSupabaseClient(url, key, {
-    auth: {
-      flowType: 'pkce',
-      autoRefreshToken: true,
-      persistSession: true,
-      detectSessionInUrl: true,
-      storageKey: 'midashub-auth',
-      // Bypass navigator.locks — prevents the 5-second freeze
-      // when app returns from background
-      lock: async (_name, _acquireTimeout, fn) => {
-        return await fn();
-      },
-    },
-  });
+  // Simple — no custom auth config. Let Supabase handle everything.
+  // The middleware no longer calls getUser(), so no lock conflicts.
+  client = createBrowserClient(url, key);
   return client;
 }

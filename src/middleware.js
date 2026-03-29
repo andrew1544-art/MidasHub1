@@ -9,24 +9,20 @@ export async function middleware(request) {
   if (!url || !key || url === 'your_supabase_project_url') return response;
 
   try {
-    const supabase = createServerClient(url, key, {
+    // Just pass cookies through — DON'T call getUser()
+    // Auth is handled entirely client-side by the store
+    // getUser() was blocking every page navigation for 1-5 seconds
+    createServerClient(url, key, {
       cookies: {
-        getAll() {
-          return request.cookies.getAll();
-        },
+        getAll() { return request.cookies.getAll(); },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) => request.cookies.set(name, value));
+          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
           response = NextResponse.next({ request });
           cookiesToSet.forEach(({ name, value, options }) => response.cookies.set(name, value, options));
         },
       },
     });
-
-    // This refreshes the session cookie if it's about to expire
-    await supabase.auth.getUser();
-  } catch (e) {
-    // Ignore auth errors in middleware
-  }
+  } catch (e) {}
 
   return response;
 }

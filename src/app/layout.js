@@ -44,11 +44,11 @@ export default function RootLayout({ children }) {
           if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('/sw.js').then(function(r) { r.update(); }).catch(function(){});
           }
-          // Auto-reload after 10min+ in background (connections are dead by then)
+          // Auto-reload after 3min+ in background (connections are dead)
           var _bg = 0;
           document.addEventListener('visibilitychange', function() {
             if (document.visibilityState === 'hidden') { _bg = Date.now(); }
-            else if (_bg && Date.now() - _bg > 600000) { window.location.reload(); }
+            else if (_bg && Date.now() - _bg > 180000) { window.location.reload(); }
           });
         `}} />
       </body>
