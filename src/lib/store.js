@@ -13,21 +13,20 @@ let pushRegistered = false;
 async function registerPush(userId) {
   if (pushRegistered) return;
   try {
-    if (typeof window === 'undefined' || !('serviceWorker' in navigator) || !('PushManager' in window)) return;
-    // Wait for SW to be ready
+    if (typeof window === 'undefined' || !('serviceWorker' in navigator) || !('PushManager' in window)) { console.log('[Push] Not supported'); return; }
     const reg = await navigator.serviceWorker.ready;
-    // Ask permission
     const perm = await Notification.requestPermission();
-    if (perm !== 'granted') return;
-    // Subscribe or get existing subscription
+    if (perm !== 'granted') { console.log('[Push] Permission denied:', perm); return; }
     let sub = await reg.pushManager.getSubscription();
     if (!sub) {
       sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC),
       });
+      console.log('[Push] New subscription created');
+    } else {
+      console.log('[Push] Existing subscription found');
     }
-    // Save to server
     const subJson = sub.toJSON();
     const res = await fetch('/api/push', {
       method: 'PUT',
@@ -37,8 +36,10 @@ async function registerPush(userId) {
         subscription: { endpoint: sub.endpoint, keys: { p256dh: subJson.keys.p256dh, auth: subJson.keys.auth } },
       }),
     });
-    if (res.ok) pushRegistered = true;
-  } catch(e) { /* Push is optional — silent fail */ }
+    const result = await res.json();
+    console.log('[Push] Registration result:', result);
+    if (result.ok) pushRegistered = true;
+  } catch(e) { console.warn('[Push] Registration error:', e.message); }
 }
 
 function urlBase64ToUint8Array(base64String) {

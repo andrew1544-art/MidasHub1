@@ -1,29 +1,32 @@
 import { NextResponse } from 'next/server';
 
-// Force Node.js runtime (web-push needs crypto)
 export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 const VAPID_PUBLIC = 'BEUwvEX0AosCeqokhBC04Mjp17WryT_DEnG_aPwBWaqZ1ENQmQGRHADql_P40bVX3OeRAiyev8_3ww4eDQUb-_o';
-const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY || 'roTy1aYPXilK215iGnPWwWBKREctBR5hjrixMfr2wsE';
+const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY || '';
 
 function getSupabase() {
   const { createClient } = require('@supabase/supabase-js');
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY
-  );
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) return null;
+  return createClient(url, key);
 }
 
-// POST /api/push — send push to a user
+// POST — send push notification to a user
 export async function POST(request) {
   try {
-    const body = await request.json();
-    const { userId, title, body: pushBody, url, tag } = body;
+    const { userId, title, body: pushBody, url, tag } = await request.json();
     if (!userId) return NextResponse.json({ error: 'userId required' }, { status: 400 });
+    if (!VAPID_PRIVATE) return NextResponse.json({ error: 'VAPID_PRIVATE_KEY not set' }, { status: 500 });
 
     const sb = getSupabase();
+    if (!sb) return NextResponse.json({ error: 'Supabase not configured' }, { status: 500 });
+
     const { data: subs, error: fetchErr } = await sb.from('push_subscriptions').select('*').eq('user_id', userId);
-    if (fetchErr || !subs?.length) return NextResponse.json({ sent: 0, reason: fetchErr?.message || 'no subs' });
+    if (fetchErr) return NextResponse.json({ error: 'DB error: ' + fetchErr.message, sent: 0 });
+    if (!subs?.length) return NextResponse.json({ sent: 0, reason: 'no subscriptions found' });
 
     const webpush = require('web-push');
     webpush.setVapidDetails('mailto:admin@midashub.app', VAPID_PUBLIC, VAPID_PRIVATE);
@@ -37,6 +40,7 @@ export async function POST(request) {
     });
 
     let sent = 0;
+    const errors = [];
     for (const sub of subs) {
       try {
         await webpush.sendNotification(
@@ -45,46 +49,74 @@ export async function POST(request) {
         );
         sent++;
       } catch (err) {
+        errors.push(err.statusCode || err.message);
         if (err.statusCode === 410 || err.statusCode === 404) {
           await sb.from('push_subscriptions').delete().eq('id', sub.id);
         }
       }
     }
-    return NextResponse.json({ sent });
+    return NextResponse.json({ sent, total: subs.length, errors });
   } catch (e) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+    return NextResponse.json({ error: e.message, stack: e.stack?.slice(0, 200) }, { status: 500 });
   }
 }
 
-// PUT /api/push — register/update push subscription
+// PUT — register push subscription
 export async function PUT(request) {
   try {
     const { userId, subscription } = await request.json();
-    if (!userId || !subscription?.endpoint || !subscription?.keys) {
-      return NextResponse.json({ error: 'missing data' }, { status: 400 });
+    if (!userId || !subscription?.endpoint || !subscription?.keys?.p256dh || !subscription?.keys?.auth) {
+      return NextResponse.json({ error: 'missing fields', received: { userId: !!userId, endpoint: !!subscription?.endpoint, p256dh: !!subscription?.keys?.p256dh, auth: !!subscription?.keys?.auth } }, { status: 400 });
     }
 
     const sb = getSupabase();
-    // Check if this endpoint already exists for this user
+    if (!sb) return NextResponse.json({ error: 'Supabase not configured' }, { status: 500 });
+
+    // Upsert
     const { data: existing } = await sb.from('push_subscriptions')
       .select('id').eq('endpoint', subscription.endpoint).eq('user_id', userId).maybeSingle();
 
     if (existing) {
-      await sb.from('push_subscriptions').update({
+      const { error } = await sb.from('push_subscriptions').update({
         p256dh: subscription.keys.p256dh,
         auth: subscription.keys.auth,
         updated_at: new Date().toISOString(),
       }).eq('id', existing.id);
+      if (error) return NextResponse.json({ error: 'update failed: ' + error.message }, { status: 500 });
+      return NextResponse.json({ ok: true, action: 'updated' });
     } else {
-      await sb.from('push_subscriptions').insert({
+      const { error } = await sb.from('push_subscriptions').insert({
         user_id: userId,
         endpoint: subscription.endpoint,
         p256dh: subscription.keys.p256dh,
         auth: subscription.keys.auth,
       });
+      if (error) return NextResponse.json({ error: 'insert failed: ' + error.message }, { status: 500 });
+      return NextResponse.json({ ok: true, action: 'created' });
     }
-    return NextResponse.json({ ok: true });
   } catch (e) {
     return NextResponse.json({ error: e.message }, { status: 500 });
   }
+}
+
+// GET — debug endpoint to check status
+export async function GET(request) {
+  const url = new URL(request.url);
+  const userId = url.searchParams.get('userId');
+  
+  const checks = {
+    vapid_set: !!VAPID_PRIVATE,
+    supabase_url: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
+    service_role: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
+  };
+
+  if (userId) {
+    const sb = getSupabase();
+    if (sb) {
+      const { data, error } = await sb.from('push_subscriptions').select('id, endpoint, created_at').eq('user_id', userId);
+      checks.subscriptions = data?.length || 0;
+      checks.sub_error = error?.message || null;
+    }
+  }
+  return NextResponse.json(checks);
 }

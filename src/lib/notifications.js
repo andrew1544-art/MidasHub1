@@ -3,12 +3,14 @@ import { createClient } from '@/lib/supabase-browser';
 // Send a web push notification via API
 async function sendPush(userId, title, body, url) {
   try {
-    await fetch('/api/push', {
+    const res = await fetch('/api/push', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ userId, title, body, url }),
     });
-  } catch(e) {}
+    const result = await res.json();
+    console.log('[Push] Send result:', result);
+  } catch(e) { console.warn('[Push] Send error:', e.message); }
 }
 
 // Send notification to a specific user
