@@ -5,9 +5,8 @@ import { useStore } from '@/lib/store';
 import { createClient } from '@/lib/supabase-browser';
 import { timeAgo, formatCount } from '@/lib/constants';
 
-// Admin user IDs — add your user ID here after first login
-// Find your ID in Supabase → Table Editor → profiles → copy your id
-const ADMIN_IDS = [];
+// Admin access is controlled from the database (profiles.is_admin)
+// To add/remove admins, update the is_admin column in Supabase
 
 export default function AdminPage() {
   const { user, profile } = useStore();
@@ -26,8 +25,8 @@ export default function AdminPage() {
   const [newCat, setNewCat] = useState({ name: '', icon: '📦', description: '', requires_kyc: true, is_active: true });
   const supabase = createClient();
 
-  // Check admin access — allow ADMIN_IDS or first user (for setup)
-  const isAdmin = user && (ADMIN_IDS.length === 0 || ADMIN_IDS.includes(user.id));
+  // Admin check — from database, not code
+  const isAdmin = profile?.is_admin === true;
 
   useEffect(() => {
     if (!isAdmin) { setLoading(false); return; }
@@ -142,7 +141,7 @@ export default function AdminPage() {
   };
 
   if (!user) return <AppShell><div className="max-w-2xl mx-auto px-4 py-20 text-center"><div className="text-6xl mb-4">🔐</div><h2 className="text-2xl font-bold">Admin Access Required</h2><p className="text-white/30 mt-2">Log in to access the admin panel</p></div></AppShell>;
-  if (!isAdmin) return <AppShell><div className="max-w-2xl mx-auto px-4 py-20 text-center"><div className="text-6xl mb-4">🚫</div><h2 className="text-2xl font-bold">Access Denied</h2><p className="text-white/30 mt-2 text-sm">Your user ID:</p><code className="text-xs text-[var(--accent)] bg-white/5 px-3 py-1.5 rounded-lg mt-2 inline-block break-all">{user.id}</code><p className="text-white/20 text-xs mt-3">Add this ID to ADMIN_IDS in src/app/admin/page.js</p></div></AppShell>;
+  if (!isAdmin) return <AppShell><div className="max-w-2xl mx-auto px-4 py-20 text-center"><div className="text-6xl mb-4">🚫</div><h2 className="text-2xl font-bold">Access Denied</h2><p className="text-white/30 mt-2 text-sm">You don&apos;t have admin access.</p><p className="text-white/15 text-xs mt-3">Contact the site owner if you need access.</p></div></AppShell>;
 
   const tabs = [
     { key: 'dashboard', label: '📊 Dashboard' },
@@ -248,8 +247,15 @@ export default function AdminPage() {
                       </div>
                     </div>
                     <div className="flex gap-1.5 shrink-0">
+                      {u.is_admin && <span className="text-[9px] px-2 py-1 rounded-full bg-purple-500/15 text-purple-400 font-bold">ADMIN</span>}
                       {u.kyc_status === 'pending' && <button onClick={() => verifyUser(u.id)} className="text-[10px] px-2.5 py-1.5 rounded-lg bg-green-500/15 text-green-400 font-semibold">✅ Verify</button>}
                       {u.kyc_status !== 'verified' && <button onClick={() => verifyUser(u.id)} className="text-[10px] px-2.5 py-1.5 rounded-lg bg-white/5 text-white/30">Force Verify</button>}
+                      {u.id !== user.id && (
+                        <button onClick={async () => { await supabase.from('profiles').update({ is_admin: !u.is_admin }).eq('id', u.id); loadAll(); }}
+                          className={`text-[10px] px-2.5 py-1.5 rounded-lg ${u.is_admin ? 'bg-red-500/15 text-red-400' : 'bg-purple-500/10 text-purple-400'}`}>
+                          {u.is_admin ? 'Remove Admin' : '⚙️ Make Admin'}
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))}
