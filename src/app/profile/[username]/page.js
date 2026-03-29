@@ -28,7 +28,7 @@ export default function ProfilePage() {
   const fetchProfile = async () => {
     setLoading(true);
     const supabase = createClient();
-    const { data: p } = await supabase.from('profiles').select('*').eq('username', username).single();
+    const { data: p } = await supabase.from('profiles').select('*').eq('username', username).maybeSingle();
     if (!p) { setProf(null); setLoading(false); return; }
     setProf(p);
 
@@ -49,7 +49,7 @@ export default function ProfilePage() {
     setStats({ posts: (userPosts||[]).length, friends: fc || 0, likes: (userPosts||[]).reduce((s,x)=>s+(x.likes_count||0),0) });
 
     if (user && user.id !== p.id) {
-      const { data: ship } = await supabase.from('friendships').select('*').or(`and(requester_id.eq.${user.id},addressee_id.eq.${p.id}),and(requester_id.eq.${p.id},addressee_id.eq.${user.id})`).single();
+      const { data: ship } = await supabase.from('friendships').select('*').or(`and(requester_id.eq.${user.id},addressee_id.eq.${p.id}),and(requester_id.eq.${p.id},addressee_id.eq.${user.id})`).maybeSingle();
       if (ship) {
         setFriendshipId(ship.id);
         setFriendStatus(ship.status === 'accepted' ? 'friends' : ship.requester_id === user.id ? 'pending_sent' : 'pending_received');

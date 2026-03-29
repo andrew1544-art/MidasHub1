@@ -23,7 +23,7 @@ export default function Header() {
   const [unreadChats, setUnreadChats] = useState(0);
   const notifRef = useRef(null);
   const menuRef = useRef(null);
-  const prevUnread = useRef(0);
+  const prevUnread = useRef(-1);
 
   // ===== BROWSER NOTIFICATION PERMISSION =====
   useEffect(() => {
