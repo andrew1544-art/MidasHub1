@@ -71,6 +71,13 @@ function FeedInner() {
     return () => window.removeEventListener('midashub:newpost', handler);
   }, [fetchPosts]);
 
+  // Refresh feed when returning from background
+  useEffect(() => {
+    const onVisible = () => { if (document.visibilityState === 'visible') { pageRef.current = 0; fetchPosts(0); } };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [fetchPosts]);
+
   // Realtime new posts — one channel, created once
   useEffect(() => {
     const supabase = createClient();

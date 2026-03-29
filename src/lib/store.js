@@ -100,16 +100,39 @@ export const useStore = create((set, get) => ({
       });
     } catch (err) { clearTimeout(safetyTimeout); set({ loading: false }); }
 
-    // Tab visibility — lightweight refresh
+    // Tab/app visibility — FULL refresh when returning from background
     if (typeof document !== 'undefined') {
-      document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState !== 'visible') return;
+      let lastHidden = 0;
+      document.addEventListener('visibilitychange', async () => {
+        if (document.visibilityState === 'hidden') {
+          lastHidden = Date.now();
+          return;
+        }
+        // App is now visible again
         const { user } = get();
         if (!user) return;
-        // Just heartbeat + quick notification refresh - don't reload session/profile
-        supabase.from('profiles').update({ last_seen: new Date().toISOString() }).eq('id', user.id).then(() => {});
-        // Debounced notification refresh
-        setTimeout(() => get().fetchNotifications?.(), 500);
+        const awayTime = Date.now() - lastHidden;
+        
+        // If away for more than 30 seconds, do a full refresh
+        if (awayTime > 30000) {
+          try {
+            // Refresh auth token (prevents 401 errors)
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session?.user) {
+              // Session expired — force re-auth
+              const { data: { session: refreshed } } = await supabase.auth.refreshSession();
+              if (!refreshed) { set({ user: null, profile: null }); return; }
+            }
+            // Heartbeat
+            supabase.from('profiles').update({ last_seen: new Date().toISOString() }).eq('id', user.id).then(() => {});
+            // Refresh notifications and chat count
+            get().fetchNotifications?.();
+            get().fetchUnreadChats?.();
+          } catch(e) {}
+        } else {
+          // Quick return — just heartbeat
+          supabase.from('profiles').update({ last_seen: new Date().toISOString() }).eq('id', user.id).then(() => {});
+        }
       });
     }
   },

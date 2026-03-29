@@ -40,34 +40,26 @@ export default function RootLayout({ children }) {
       <body className="antialiased">
         {children}
         <script dangerouslySetInnerHTML={{ __html: `
-          // Auto-clear ALL caches on every load — always fresh
-          if ('caches' in window) {
-            caches.keys().then(function(keys) {
-              keys.forEach(function(k) { caches.delete(k); });
-            });
-          }
-          // Register SW with force update
+          // Auto-clear caches
+          if ('caches' in window) { caches.keys().then(function(k) { k.forEach(function(c) { caches.delete(c); }); }); }
+          // SW registration
           if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('/sw.js').then(function(reg) {
-              // Force check for new SW immediately
-              reg.update();
-              // If new SW found, activate it right away
-              reg.addEventListener('updatefound', function() {
-                var nw = reg.installing;
-                if (nw) {
-                  nw.addEventListener('statechange', function() {
-                    if (nw.state === 'activated') {
-                      // New SW active — reload silently if needed
-                    }
-                  });
-                }
-              });
-            }).catch(function() {});
-            // Tell any waiting SW to take over NOW
-            navigator.serviceWorker.ready.then(function(reg) {
-              if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
-            });
+            navigator.serviceWorker.register('/sw.js').then(function(r) {
+              r.update();
+              if (r.waiting) r.waiting.postMessage({ type: 'SKIP_WAITING' });
+            }).catch(function(){});
+            navigator.serviceWorker.ready.then(function(r) { if (r.waiting) r.waiting.postMessage({ type: 'SKIP_WAITING' }); });
           }
+          // AUTO-RELOAD when app returns from long background (>5 min)
+          // This fixes frozen connections on mobile phones
+          var _lastActive = Date.now();
+          document.addEventListener('visibilitychange', function() {
+            if (document.visibilityState === 'visible') {
+              var away = Date.now() - _lastActive;
+              if (away > 300000) { window.location.reload(); }
+            }
+            _lastActive = Date.now();
+          });
         `}} />
       </body>
     </html>

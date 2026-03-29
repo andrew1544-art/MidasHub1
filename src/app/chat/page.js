@@ -156,7 +156,6 @@ function ChatInner() {
     if (!activeConvo) return;
     const ch = sb.channel(`chat-${activeConvo}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `conversation_id=eq.${activeConvo}` }, async (p) => {
-        // Check duplicate
         if (msgsRef.current.some(m => m.id === p.new.id)) return;
         try {
           const { data } = await sb.from('messages').select('*, profiles(id, display_name, avatar_emoji)').eq('id', p.new.id).maybeSingle();
@@ -165,12 +164,37 @@ function ChatInner() {
             setMessages([...msgsRef.current]);
             if (data.sender_id !== user.id) playMessageSound();
             setTimeout(() => endRef.current?.scrollIntoView({ behavior: 'smooth' }), 30);
-            // Mark as read instantly
             sb.from('conversation_members').update({ last_read_at: new Date().toISOString() }).match({ conversation_id: activeConvo, user_id: user.id }).then(() => {});
           }
         } catch(e) {}
       }).subscribe();
-    return () => { sb.removeChannel(ch); };
+
+    // When app returns from background, fetch any missed messages
+    const onVisible = async () => {
+      if (document.visibilityState !== 'visible') return;
+      try {
+        const lastMsg = msgsRef.current[msgsRef.current.length - 1];
+        const since = lastMsg?.created_at || '1970-01-01';
+        const { data: newMsgs } = await sb.from('messages').select('*, profiles(id, display_name, avatar_emoji)')
+          .eq('conversation_id', activeConvo).gt('created_at', since).order('created_at', { ascending: true });
+        if (newMsgs?.length) {
+          const existingIds = new Set(msgsRef.current.map(m => m.id));
+          const fresh = newMsgs.filter(m => !existingIds.has(m.id));
+          if (fresh.length) {
+            // Also remove any optimistic messages that now have real versions
+            msgsRef.current = [...msgsRef.current.filter(m => !String(m.id).startsWith('temp-')), ...fresh];
+            setMessages([...msgsRef.current]);
+            setTimeout(() => endRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
+          }
+        }
+      } catch(e) {}
+    };
+    document.addEventListener('visibilitychange', onVisible);
+
+    return () => {
+      sb.removeChannel(ch);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   }, [activeConvo]);
 
   // ===== SEND TEXT =====
