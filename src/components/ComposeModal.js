@@ -63,19 +63,26 @@ export default function ComposeModal() {
     setLoading(true); setError('');
     try {
       const supabase = createClient();
-      let mediaUrls = [];
       let hasVideo = false;
-      for (const file of mediaFiles) {
+      
+      // Upload ALL media in PARALLEL (not one by one)
+      const uploadPromises = mediaFiles.map(async (file) => {
         try {
           if (file.type.startsWith('video/')) hasVideo = true;
           const ext = file.name.split('.').pop();
           const path = `${user.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-          const { data, error: ue } = await supabase.storage.from('media').upload(path, file);
-          if (data && !ue) { const { data: u } = supabase.storage.from('media').getPublicUrl(data.path); mediaUrls.push(u.publicUrl); }
-        } catch (e) {}
-      }
+          const { data, error } = await supabase.storage.from('media').upload(path, file, { contentType: file.type, cacheControl: '3600' });
+          if (data && !error) {
+            const { data: u } = supabase.storage.from('media').getPublicUrl(data.path);
+            return u.publicUrl;
+          }
+          return null;
+        } catch (e) { return null; }
+      });
+      const results = await Promise.all(uploadPromises);
+      const mediaUrls = results.filter(Boolean);
+
       const parsedTags = tags.split(',').map(t => t.trim().replace('#', '').toLowerCase()).filter(Boolean);
-      // If quoting, append the quote to content
       let finalContent = content.trim();
       if (quote) {
         finalContent += `\n\n💬 Reposting @${quote.username}:\n"${quote.content.slice(0, 200)}${quote.content.length > 200 ? '...' : ''}"`;

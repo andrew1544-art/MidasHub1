@@ -8,13 +8,14 @@ import { RankBadge, RankCard } from '@/components/RankBadge';
 import { useStore } from '@/lib/store';
 import { createClient } from '@/lib/supabase-browser';
 import { sendNotification } from '@/lib/notifications';
-import { PLATFORM_LIST, formatCount } from '@/lib/constants';
+import { PLATFORM_LIST, formatCount, timeAgo } from '@/lib/constants';
 
 export default function ProfilePage() {
   const { username } = useParams();
   const { user, profile: myProfile, setShowAuth, showToast } = useStore();
   const [prof, setProf] = useState(null);
   const [posts, setPosts] = useState([]);
+  const [reposts, setReposts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [friendStatus, setFriendStatus] = useState(null);
   const [friendshipId, setFriendshipId] = useState(null);
@@ -32,21 +33,41 @@ export default function ProfilePage() {
     if (!p) { setProf(null); setLoading(false); return; }
     setProf(p);
 
-    const { data: userPosts } = await supabase.from('posts').select('*, profiles(*)').eq('user_id', p.id).order('created_at', { ascending: false });
-    if (user && userPosts?.length) {
-      const ids = userPosts.map(x => x.id);
-      const [lr, br] = await Promise.all([
-        supabase.from('likes').select('post_id').eq('user_id', user.id).in('post_id', ids),
-        supabase.from('bookmarks').select('post_id').eq('user_id', user.id).in('post_id', ids),
-      ]);
-      const liked = new Set((lr.data||[]).map(l=>l.post_id));
-      const bkd = new Set((br.data||[]).map(b=>b.post_id));
-      userPosts.forEach(x => { x.user_liked = liked.has(x.id); x.user_bookmarked = bkd.has(x.id); });
-    }
-    setPosts(userPosts || []);
+    // Fetch posts + reposts + friend count in PARALLEL
+    const [postsRes, repostRes, friendRes] = await Promise.all([
+      supabase.from('posts').select('*, profiles(*)').eq('user_id', p.id).order('created_at', { ascending: false }),
+      supabase.from('reposts').select('post_id, created_at').eq('user_id', p.id).order('created_at', { ascending: false }),
+      supabase.from('friendships').select('*', { count: 'exact', head: true }).or(`requester_id.eq.${p.id},addressee_id.eq.${p.id}`).eq('status', 'accepted'),
+    ]);
 
-    const { count: fc } = await supabase.from('friendships').select('*', { count: 'exact', head: true }).or(`requester_id.eq.${p.id},addressee_id.eq.${p.id}`).eq('status', 'accepted');
-    setStats({ posts: (userPosts||[]).length, friends: fc || 0, likes: (userPosts||[]).reduce((s,x)=>s+(x.likes_count||0),0) });
+    const userPosts = postsRes.data || [];
+
+    // Fetch reposted posts if any
+    let repostedPosts = [];
+    const repostIds = (repostRes.data || []).map(r => r.post_id);
+    if (repostIds.length) {
+      const { data: rp } = await supabase.from('posts').select('*, profiles(*)').in('id', repostIds);
+      repostedPosts = (rp || []).map(post => ({ ...post, _reposted: true, _reposted_at: (repostRes.data || []).find(r => r.post_id === post.id)?.created_at }));
+    }
+
+    // Mark liked/bookmarked for current user
+    if (user) {
+      const allPosts = [...userPosts, ...repostedPosts];
+      const ids = allPosts.map(x => x.id);
+      if (ids.length) {
+        const [lr, br] = await Promise.all([
+          supabase.from('likes').select('post_id').eq('user_id', user.id).in('post_id', ids),
+          supabase.from('bookmarks').select('post_id').eq('user_id', user.id).in('post_id', ids),
+        ]);
+        const liked = new Set((lr.data||[]).map(l=>l.post_id));
+        const bkd = new Set((br.data||[]).map(b=>b.post_id));
+        allPosts.forEach(x => { x.user_liked = liked.has(x.id); x.user_bookmarked = bkd.has(x.id); });
+      }
+    }
+
+    setPosts(userPosts);
+    setReposts(repostedPosts);
+    setStats({ posts: userPosts.length, friends: friendRes.count || 0, likes: userPosts.reduce((s,x)=>s+(x.likes_count||0),0), reposts: repostedPosts.length });
 
     if (user && user.id !== p.id) {
       const { data: ship } = await supabase.from('friendships').select('*').or(`and(requester_id.eq.${user.id},addressee_id.eq.${p.id}),and(requester_id.eq.${p.id},addressee_id.eq.${user.id})`).maybeSingle();
@@ -164,7 +185,7 @@ export default function ProfilePage() {
 
         {/* Tabs */}
         <div className="flex gap-2 mb-5">
-          {[{ key: 'posts', label: '📝 Posts' }, { key: 'viral', label: '🔥 Viral' }].map(t => (
+          {[{ key: 'posts', label: `📝 Posts (${posts.length})` }, { key: 'reposts', label: `🔄 Reposts (${reposts.length})` }, { key: 'viral', label: '🔥 Viral' }].map(t => (
             <button key={t.key} onClick={() => setTab(t.key)}
               className={`platform-pill px-4 py-2 rounded-xl text-sm ${tab === t.key ? 'bg-white/10 text-white font-bold' : 'bg-white/4 text-white/35'}`}>
               {t.label}
@@ -174,10 +195,22 @@ export default function ProfilePage() {
 
         {/* Posts */}
         <div className="space-y-3">
-          {(tab === 'viral' ? posts.filter(p => p.is_viral) : posts).length === 0 ? (
-            <div className="text-center py-16 text-white/20 text-sm">{tab === 'viral' ? 'No viral posts yet' : 'No posts yet'}</div>
-          ) : (
-            (tab === 'viral' ? posts.filter(p => p.is_viral) : posts).map(post => <PostCard key={post.id} post={post} onPostUpdated={fetchProfile}/>)
+          {tab === 'posts' && (
+            posts.length === 0 ? <div className="text-center py-16 text-white/20 text-sm">No posts yet</div>
+            : posts.map(post => <PostCard key={post.id} post={post} onPostUpdated={fetchProfile}/>)
+          )}
+          {tab === 'reposts' && (
+            reposts.length === 0 ? <div className="text-center py-16 text-white/20 text-sm">No reposts yet</div>
+            : reposts.map(post => (
+              <div key={`rp-${post.id}`}>
+                <div className="text-xs text-white/25 mb-1.5 pl-1">🔄 {prof?.display_name} reposted · {timeAgo(post._reposted_at)}</div>
+                <PostCard post={post} onPostUpdated={fetchProfile}/>
+              </div>
+            ))
+          )}
+          {tab === 'viral' && (
+            posts.filter(p => p.is_viral).length === 0 ? <div className="text-center py-16 text-white/20 text-sm">No viral posts yet</div>
+            : posts.filter(p => p.is_viral).map(post => <PostCard key={post.id} post={post} onPostUpdated={fetchProfile}/>)
           )}
         </div>
       </div>

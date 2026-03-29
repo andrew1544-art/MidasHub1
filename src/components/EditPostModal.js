@@ -56,19 +56,22 @@ export default function EditPostModal({ post, onClose, onSaved }) {
     try {
       const supabase = createClient();
 
-      // Upload new media
-      let allMediaUrls = [...existingMedia];
-      for (const file of newMediaFiles) {
-        try {
-          const ext = file.name.split('.').pop();
-          const path = `${user.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-          const { data, error: ue } = await supabase.storage.from('media').upload(path, file);
-          if (data && !ue) {
-            const { data: u } = supabase.storage.from('media').getPublicUrl(data.path);
-            allMediaUrls.push(u.publicUrl);
-          }
-        } catch (e) {}
-      }
+      // Upload new media in PARALLEL
+      const uploadResults = await Promise.all(
+        newMediaFiles.map(async (file) => {
+          try {
+            const ext = file.name.split('.').pop();
+            const path = `${user.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+            const { data, error } = await supabase.storage.from('media').upload(path, file, { contentType: file.type, cacheControl: '3600' });
+            if (data && !error) {
+              const { data: u } = supabase.storage.from('media').getPublicUrl(data.path);
+              return u.publicUrl;
+            }
+            return null;
+          } catch (e) { return null; }
+        })
+      );
+      const allMediaUrls = [...existingMedia, ...uploadResults.filter(Boolean)];
 
       const parsedTags = tags.split(',').map(t => t.trim().replace('#', '').toLowerCase()).filter(Boolean);
       const hasVideo = allMediaUrls.some(url => /\.(mp4|webm|mov|avi|ogg)$/i.test(url)) || newMediaFiles.some(f => f.type.startsWith('video/'));
