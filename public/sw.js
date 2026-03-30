@@ -1,4 +1,4 @@
-const V = 'v8';
+const V = 'v9';
 
 self.addEventListener('install', () => {
   console.log('[SW] Installing', V);
