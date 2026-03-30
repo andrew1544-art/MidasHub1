@@ -21,6 +21,7 @@ export default function AdminPage() {
   const [kycQueue, setKycQueue] = useState([]);
   const [posts, setPosts] = useState([]);
   const [tradeRoles, setTradeRoles] = useState([]);
+  const [feedbackList, setFeedbackList] = useState([]);
   const [newRole, setNewRole] = useState({ name: '', icon: '👤', description: '' });
   const [loading, setLoading] = useState(true);
   const [editingEscrow, setEditingEscrow] = useState(null);
@@ -108,6 +109,9 @@ export default function AdminPage() {
       if (tab === 'roles') {
         try { const { data } = await supabase.from('trade_roles').select('*').order('display_order'); setTradeRoles(data || []); } catch(e) { setTradeRoles([]); }
       }
+      if (tab === 'feedback') {
+        try { const { data } = await supabase.from('feedback').select('*, profiles:user_id(display_name, username, avatar_emoji, email)').order('created_at', { ascending: false }).limit(100); setFeedbackList(data || []); } catch(e) { setFeedbackList([]); }
+      }
     } catch (e) { console.error('Admin load error:', e); }
     setLoading(false);
   };
@@ -182,6 +186,7 @@ export default function AdminPage() {
     { key: 'escrow', label: '💰 Escrow' },
     { key: 'categories', label: '📂 Categories' },
     { key: 'roles', label: '🎭 Roles' },
+    { key: 'feedback', label: '💡 Feedback' },
     { key: 'posts', label: '📝 Posts' },
   ];
 
@@ -603,6 +608,48 @@ export default function AdminPage() {
                   ))}
                   {tradeRoles.length === 0 && <div className="text-center py-8 text-white/20 text-sm">No roles yet. Add some above!</div>}
                 </div>
+              </div>
+            )}
+
+            {/* ===== FEEDBACK ===== */}
+            {tab === 'feedback' && (
+              <div className="space-y-2">
+                <div className="text-xs text-white/30 mb-2">{feedbackList.length} feedback items</div>
+                {feedbackList.length === 0 && <div className="text-center py-12 text-white/20">No feedback yet</div>}
+                {feedbackList.map(f => {
+                  const typeConfig = { feature: { icon: '💡', color: 'text-blue-400', bg: 'bg-blue-500/10' }, bug: { icon: '🐛', color: 'text-red-400', bg: 'bg-red-500/10' }, complaint: { icon: '⚠️', color: 'text-yellow-400', bg: 'bg-yellow-500/10' }, other: { icon: '💬', color: 'text-white/50', bg: 'bg-white/5' } };
+                  const tc = typeConfig[f.type] || typeConfig.other;
+                  const statusColors = { new: 'bg-blue-500/15 text-blue-400', reviewing: 'bg-yellow-500/15 text-yellow-400', planned: 'bg-purple-500/15 text-purple-400', done: 'bg-green-500/15 text-green-400', dismissed: 'bg-white/5 text-white/30' };
+                  return (
+                    <div key={f.id} className="glass-light rounded-xl p-4 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <span className={`text-xs px-2 py-0.5 rounded-full ${tc.bg} ${tc.color} font-bold`}>{tc.icon} {f.type}</span>
+                        <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold ${statusColors[f.status] || statusColors.new}`}>{f.status?.toUpperCase()}</span>
+                        <span className="text-[10px] text-white/20 ml-auto">{timeAgo(f.created_at)}</span>
+                      </div>
+                      <div className="text-sm text-white/80 whitespace-pre-wrap">{f.message}</div>
+                      <div className="flex items-center gap-2 text-[10px] text-white/30">
+                        <span>{f.profiles?.avatar_emoji || '😎'}</span>
+                        <span>{f.profiles?.display_name || 'Unknown'}</span>
+                        <span>@{f.profiles?.username || '?'}</span>
+                        {f.profiles?.email && <span className="text-white/20">· {f.profiles.email}</span>}
+                      </div>
+                      {f.admin_reply && <div className="p-2 rounded-lg bg-green-500/8 text-xs text-green-300">🛡️ Reply: {f.admin_reply}</div>}
+                      <div className="flex gap-1.5 pt-1">
+                        {['new','reviewing','planned','done','dismissed'].map(s => (
+                          <button key={s} onClick={async () => { await supabase.from('feedback').update({ status: s, updated_at: new Date().toISOString() }).eq('id', f.id); loadAll(); }}
+                            className={`text-[9px] px-2 py-1 rounded-lg ${f.status === s ? statusColors[s] + ' font-bold' : 'bg-white/3 text-white/25'}`}>{s}</button>
+                        ))}
+                        <button onClick={async () => {
+                          const reply = prompt('Reply to user (they\'ll see this):');
+                          if (!reply) return;
+                          await supabase.from('feedback').update({ admin_reply: reply, status: 'reviewing', updated_at: new Date().toISOString() }).eq('id', f.id);
+                          loadAll();
+                        }} className="text-[9px] px-2 py-1 rounded-lg bg-blue-500/10 text-blue-400 ml-auto">💬 Reply</button>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
 

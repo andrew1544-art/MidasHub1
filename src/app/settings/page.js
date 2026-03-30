@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import AppShell from '@/components/AppShell';
 import { useStore } from '@/lib/store';
+import { createClient } from '@/lib/supabase-browser';
 import { PLATFORM_LIST, AVATAR_OPTIONS } from '@/lib/constants';
 
 export default function SettingsPage() {
@@ -11,6 +12,10 @@ export default function SettingsPage() {
   const [form, setForm] = useState({});
   const [saving, setSaving] = useState(false);
   const [showAvatars, setShowAvatars] = useState(false);
+  const [feedbackType, setFeedbackType] = useState('feature');
+  const [feedbackMsg, setFeedbackMsg] = useState('');
+  const [feedbackSent, setFeedbackSent] = useState(false);
+  const [sendingFeedback, setSendingFeedback] = useState(false);
 
   useEffect(() => {
     if (profile) setForm({
@@ -99,6 +104,45 @@ export default function SettingsPage() {
             <div className="flex justify-between"><span className="text-white/30">Verified</span><span className="text-green-400">✓ Verified</span></div>
             <div className="flex justify-between"><span className="text-white/30">Joined</span><span>{new Date(profile?.created_at).toLocaleDateString()}</span></div>
           </div>
+        </div>
+
+        {/* Feedback & Feature Requests */}
+        <div className="glass-light rounded-2xl p-5">
+          <h2 className="font-bold text-base mb-3">💡 Feedback & Requests</h2>
+          <p className="text-xs text-white/30 mb-3">Got an idea? Found a bug? Tell us and we&apos;ll work on it.</p>
+          
+          <div className="flex gap-1.5 mb-3">
+            {[['feature','💡 Feature'],['bug','🐛 Bug'],['complaint','⚠️ Complaint'],['other','💬 Other']].map(([val, label]) => (
+              <button key={val} onClick={() => setFeedbackType(val)}
+                className={`text-[11px] px-3 py-1.5 rounded-lg ${feedbackType === val ? 'bg-[var(--accent)]/15 text-[var(--accent)] border border-[var(--accent)]/30' : 'bg-white/5 text-white/40'}`}>
+                {label}
+              </button>
+            ))}
+          </div>
+
+          <textarea value={feedbackMsg} onChange={e => setFeedbackMsg(e.target.value)}
+            placeholder={feedbackType === 'feature' ? 'Describe the feature you want...' : feedbackType === 'bug' ? 'What went wrong? Steps to reproduce...' : feedbackType === 'complaint' ? 'What\'s the issue?...' : 'Your message...'}
+            className="input-field text-sm resize-none h-24 mb-3" style={{ fontSize: '16px' }} />
+
+          {feedbackSent ? (
+            <div className="text-center py-2 text-green-400 text-sm font-semibold">✅ Sent! We&apos;ll review it soon.</div>
+          ) : (
+            <button onClick={async () => {
+              if (!feedbackMsg.trim()) return;
+              setSendingFeedback(true);
+              try {
+                const sb = createClient();
+                await sb.from('feedback').insert({ user_id: user.id, type: feedbackType, message: feedbackMsg.trim() });
+                setFeedbackMsg(''); setFeedbackSent(true);
+                showToast('Feedback sent ✓');
+                setTimeout(() => setFeedbackSent(false), 5000);
+              } catch(e) { showToast('Failed to send'); }
+              setSendingFeedback(false);
+            }} disabled={!feedbackMsg.trim() || sendingFeedback}
+              className="btn-primary w-full py-2.5 text-sm disabled:opacity-30">
+              {sendingFeedback ? '⏳...' : 'Send Feedback'}
+            </button>
+          )}
         </div>
 
         {/* Save */}

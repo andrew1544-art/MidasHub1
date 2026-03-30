@@ -105,7 +105,25 @@ function friendlyError(msg) {
 }
 
 async function loadProfile(supabase, userId) {
-  try { const { data } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle(); return data; } catch (e) { return null; }
+  try {
+    const { data } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
+    if (data) {
+      // Sync email + DOB from auth if missing in profile
+      const updates = {};
+      if (!data.email) {
+        try {
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user?.email) updates.email = user.email;
+          if (!data.date_of_birth && user?.user_metadata?.date_of_birth) updates.date_of_birth = user.user_metadata.date_of_birth;
+        } catch(e) {}
+      }
+      if (Object.keys(updates).length) {
+        await supabase.from('profiles').update(updates).eq('id', userId).then(() => {});
+        Object.assign(data, updates);
+      }
+    }
+    return data;
+  } catch (e) { return null; }
 }
 
 let authInitialized = false;
@@ -243,7 +261,7 @@ export const useStore = create((set, get) => ({
       if (age < 15) return { error: { message: 'You must be at least 15 years old.' } };
       const { data: existing } = await supabase.from('profiles').select('id').eq('username', username.toLowerCase()).maybeSingle();
       if (existing) return { error: { message: 'Username "' + username + '" is taken.' } };
-      const { data, error } = await supabase.auth.signUp({ email, password, options: { data: { username: username.toLowerCase(), display_name: displayName, avatar_emoji: avatarEmoji || '😎' }, emailRedirectTo: `${window.location.origin}/auth/callback` } });
+      const { data, error } = await supabase.auth.signUp({ email, password, options: { data: { username: username.toLowerCase(), display_name: displayName, avatar_emoji: avatarEmoji || '😎', date_of_birth: dateOfBirth, email: email }, emailRedirectTo: `${window.location.origin}/auth/callback` } });
       if (error) return { error: { message: friendlyError(error.message) } };
       if (data?.user?.identities?.length === 0) return { error: { message: 'Email already registered.' } };
       return { data, needsVerification: true };
