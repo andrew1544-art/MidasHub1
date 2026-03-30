@@ -770,101 +770,180 @@ function DiagnosticsPanel({ supabase, user }) {
   const [results, setResults] = useState([]);
   const [running, setRunning] = useState(false);
   const [done, setDone] = useState(false);
+  const [mode, setMode] = useState('system'); // system | bugs
 
-  const addResult = (name, status, detail) => {
-    setResults(prev => [...prev, { name, status, detail, time: Date.now() }]);
+  const add = (cat, name, status, detail) => {
+    setResults(prev => [...prev, { cat, name, status, detail }]);
   };
 
-  const runAll = async () => {
+  // ===== SYSTEM CHECKS =====
+  const runSystem = async () => {
     setResults([]); setRunning(true); setDone(false);
 
-    // 1. Database connection
-    try { const { count } = await supabase.from('profiles').select('*', { count: 'exact', head: true }); addResult('Database Connection', '✅', `${count} profiles found`); } catch(e) { addResult('Database Connection', '❌', e.message); }
+    try { const { count } = await supabase.from('profiles').select('*', { count: 'exact', head: true }); add('DB', 'Database', '✅', `Connected — ${count} profiles`); } catch(e) { add('DB', 'Database', '❌', e.message); }
+    try { const { data: { session } } = await supabase.auth.getSession(); add('Auth', 'Session', session ? '✅' : '⚠️', session ? session.user.email : 'No session'); } catch(e) { add('Auth', 'Session', '❌', e.message); }
+    try { const { data } = await supabase.from('profiles').select('id,email,is_verified,badges,is_suspended,last_ip,login_count,xp,trade_count,referral_code').limit(1); const cols = data?.[0] ? Object.keys(data[0]) : []; add('DB', 'Profile Columns', '✅', `${cols.length} columns`); } catch(e) { add('DB', 'Profile Columns', '❌', e.message); }
 
-    // 2. Auth session
-    try { const { data: { session } } = await supabase.auth.getSession(); addResult('Auth Session', session ? '✅' : '⚠️', session ? `User: ${session.user.email}` : 'No active session'); } catch(e) { addResult('Auth Session', '❌', e.message); }
+    const tables = ['posts','messages','trades','notifications','trade_roles','trade_categories','escrow_settings','push_subscriptions','feedback','user_sessions','trade_participants','conversation_members','conversations','likes','bookmarks','reposts','comments','friendships'];
+    for (const t of tables) {
+      try { const { count, error } = await supabase.from(t).select('*', { count: 'exact', head: true }); add('Tables', t, error ? '❌' : '✅', error ? error.message : `${count} rows`); } catch(e) { add('Tables', t, '❌', e.message); }
+    }
 
-    // 3. Profiles table columns
+    try { const { data } = await supabase.storage.from('media').list('', { limit: 1 }); add('Storage', 'Media Bucket', '✅', 'Accessible'); } catch(e) { add('Storage', 'Media Bucket', '❌', e.message); }
+    try { const res = await fetch('/api/push?userId=' + user.id); const d = await res.json(); add('Push', 'Push API', d.vapid_set && d.service_role ? '✅' : '⚠️', `VAPID:${d.vapid_set?'✅':'❌'} DB:${d.supabase_url?'✅':'❌'} Key:${d.service_role?'✅':'❌'} Subs:${d.subscriptions??'?'}`); } catch(e) { add('Push', 'Push API', '❌', e.message); }
+    try { const reg = await navigator.serviceWorker?.getRegistration(); add('SW', 'Service Worker', reg?.active ? '✅' : '⚠️', reg ? `State: ${reg.active?.state}` : 'Not registered'); } catch(e) { add('SW', 'Service Worker', '⚠️', e.message); }
+    try { add('Notif', 'Permission', Notification.permission === 'granted' ? '✅' : '⚠️', Notification.permission); } catch(e) { add('Notif', 'Permission', '⚠️', 'N/A'); }
+    try { const ch = supabase.channel('test-rt'); const s = await new Promise(r => { ch.subscribe(s => r(s)); setTimeout(() => r('timeout'), 3000); }); supabase.removeChannel(ch); add('Realtime', 'WebSocket', s === 'SUBSCRIBED' ? '✅' : '⚠️', s); } catch(e) { add('Realtime', 'WebSocket', '❌', e.message); }
+
+    setRunning(false); setDone(true);
+  };
+
+  // ===== BUG TESTS (real CRUD operations) =====
+  const runBugs = async () => {
+    setResults([]); setRunning(true); setDone(false);
+    const testId = 'test_' + Date.now();
+
+    // Test 1: Auth token valid
+    add('🔐', 'Auth Token', '⏳', 'Checking...');
     try {
-      const { data } = await supabase.from('profiles').select('id, email, date_of_birth, is_verified, badges, is_suspended, last_ip, last_country, login_count, xp, trade_count').limit(1);
-      const cols = data?.[0] ? Object.keys(data[0]) : [];
-      const expected = ['email','date_of_birth','is_verified','badges','is_suspended','last_ip','last_country','login_count','xp','trade_count'];
-      const missing = expected.filter(c => !cols.includes(c));
-      addResult('Profile Columns', missing.length === 0 ? '✅' : '⚠️', missing.length ? `Missing: ${missing.join(', ')}` : `All ${expected.length} columns present`);
-    } catch(e) { addResult('Profile Columns', '❌', e.message); }
+      const { data: { session }, error } = await supabase.auth.getSession();
+      if (session?.access_token) { setResults(prev => prev.map(r => r.name === 'Auth Token' ? { ...r, status: '✅', detail: `Token valid, expires ${new Date(session.expires_at * 1000).toLocaleTimeString()}` } : r)); }
+      else { setResults(prev => prev.map(r => r.name === 'Auth Token' ? { ...r, status: '❌', detail: 'No valid session — auth is broken' } : r)); }
+    } catch(e) { setResults(prev => prev.map(r => r.name === 'Auth Token' ? { ...r, status: '❌', detail: e.message } : r)); }
 
-    // 4. Posts table
-    try { const { count } = await supabase.from('posts').select('*', { count: 'exact', head: true }); addResult('Posts Table', '✅', `${count} posts`); } catch(e) { addResult('Posts Table', '❌', e.message); }
-
-    // 5. Messages table
-    try { const { count } = await supabase.from('messages').select('*', { count: 'exact', head: true }); addResult('Messages Table', '✅', `${count} messages`); } catch(e) { addResult('Messages Table', '❌', e.message); }
-
-    // 6. Trades table
-    try { const { count } = await supabase.from('trades').select('*', { count: 'exact', head: true }); addResult('Trades Table', '✅', `${count} trades`); } catch(e) { addResult('Trades Table', '❌', e.message); }
-
-    // 7. Notifications
-    try { const { count } = await supabase.from('notifications').select('*', { count: 'exact', head: true }); addResult('Notifications Table', '✅', `${count} notifications`); } catch(e) { addResult('Notifications Table', '❌', e.message); }
-
-    // 8. Trade roles
-    try { const { data } = await supabase.from('trade_roles').select('*'); addResult('Trade Roles', '✅', `${data?.length || 0} roles: ${(data||[]).map(r => r.icon + r.name).join(', ')}`); } catch(e) { addResult('Trade Roles', '⚠️', 'Table missing — run trade-roles SQL'); }
-
-    // 9. Trade categories
-    try { const { data } = await supabase.from('trade_categories').select('*'); addResult('Trade Categories', '✅', `${data?.length || 0} categories`); } catch(e) { addResult('Trade Categories', '⚠️', 'Table missing — run SQL'); }
-
-    // 10. Escrow settings
-    try { const { data } = await supabase.from('escrow_settings').select('*'); addResult('Escrow Settings', '✅', `${data?.length || 0} payment methods`); } catch(e) { addResult('Escrow Settings', '⚠️', 'Table missing'); }
-
-    // 11. Push subscriptions
-    try { const { count } = await supabase.from('push_subscriptions').select('*', { count: 'exact', head: true }); addResult('Push Subscriptions', '✅', `${count} devices registered`); } catch(e) { addResult('Push Subscriptions', '⚠️', 'Table missing — run push SQL'); }
-
-    // 12. Feedback table
-    try { const { count } = await supabase.from('feedback').select('*', { count: 'exact', head: true }); addResult('Feedback Table', '✅', `${count} items`); } catch(e) { addResult('Feedback Table', '⚠️', 'Table missing — run feedback SQL'); }
-
-    // 13. User sessions
-    try { const { count } = await supabase.from('user_sessions').select('*', { count: 'exact', head: true }); addResult('User Sessions', '✅', `${count} session logs`); } catch(e) { addResult('User Sessions', '⚠️', 'Table missing — run tracking SQL'); }
-
-    // 14. Trade participants
-    try { const { count } = await supabase.from('trade_participants').select('*', { count: 'exact', head: true }); addResult('Trade Participants', '✅', `${count} participants`); } catch(e) { addResult('Trade Participants', '⚠️', 'Table missing — run trade-roles SQL'); }
-
-    // 15. Storage bucket
-    try { const { data } = await supabase.storage.from('media').list('', { limit: 1 }); addResult('Storage (media)', '✅', 'Bucket accessible'); } catch(e) { addResult('Storage (media)', '❌', e.message); }
-
-    // 16. Push API
-    try { const res = await fetch('/api/push?userId=' + user.id); const data = await res.json(); addResult('Push API', data.vapid_set && data.supabase_url && data.service_role ? '✅' : '⚠️', `VAPID: ${data.vapid_set ? '✅' : '❌'}, Supabase: ${data.supabase_url ? '✅' : '❌'}, ServiceRole: ${data.service_role ? '✅' : '❌'}, Subs: ${data.subscriptions ?? '?'}`); } catch(e) { addResult('Push API', '❌', e.message); }
-
-    // 17. Service Worker
+    // Test 2: Can INSERT a post
+    add('📝', 'Create Post', '⏳', 'Testing...');
+    let testPostId = null;
     try {
-      const reg = await navigator.serviceWorker?.getRegistration();
-      addResult('Service Worker', reg ? '✅' : '⚠️', reg ? `Active: ${reg.active?.state || 'unknown'}, Scope: ${reg.scope}` : 'Not registered');
-    } catch(e) { addResult('Service Worker', '⚠️', e.message); }
+      const { data, error } = await supabase.from('posts').insert({ user_id: user.id, content: `[BUG TEST — will delete] ${testId}`, source_platform: 'midashub', is_public: false }).select().single();
+      if (error) { setResults(prev => prev.map(r => r.name === 'Create Post' ? { ...r, status: '❌', detail: `INSERT failed: ${error.message}` } : r)); }
+      else { testPostId = data.id; setResults(prev => prev.map(r => r.name === 'Create Post' ? { ...r, status: '✅', detail: `Created post ${data.id.slice(0,8)}` } : r)); }
+    } catch(e) { setResults(prev => prev.map(r => r.name === 'Create Post' ? { ...r, status: '❌', detail: e.message } : r)); }
 
-    // 18. Notification permission
-    try { const perm = typeof Notification !== 'undefined' ? Notification.permission : 'unsupported'; addResult('Notification Permission', perm === 'granted' ? '✅' : '⚠️', perm); } catch(e) { addResult('Notification Permission', '⚠️', 'Not available'); }
+    // Test 3: Can LIKE a post
+    add('❤️', 'Like Post', '⏳', 'Testing...');
+    if (testPostId) {
+      try {
+        const { error } = await supabase.from('likes').insert({ user_id: user.id, post_id: testPostId });
+        if (error) setResults(prev => prev.map(r => r.name === 'Like Post' ? { ...r, status: '❌', detail: `Like INSERT failed: ${error.message}` } : r));
+        else {
+          // Verify it saved
+          const { count } = await supabase.from('likes').select('*', { count: 'exact', head: true }).eq('post_id', testPostId).eq('user_id', user.id);
+          setResults(prev => prev.map(r => r.name === 'Like Post' ? { ...r, status: count > 0 ? '✅' : '❌', detail: count > 0 ? 'Liked + verified in DB' : 'Like inserted but not found!' } : r));
+          // Clean up
+          await supabase.from('likes').delete().match({ user_id: user.id, post_id: testPostId });
+        }
+      } catch(e) { setResults(prev => prev.map(r => r.name === 'Like Post' ? { ...r, status: '❌', detail: e.message } : r)); }
+    } else { setResults(prev => prev.map(r => r.name === 'Like Post' ? { ...r, status: '⏭️', detail: 'Skipped — no test post' } : r)); }
 
-    // 19. Auto-verify trigger
-    try { const { data } = await supabase.rpc('pg_catalog.pg_get_triggerdef', { trigger_oid: 0 }).catch(() => null); } catch(e) {}
-    try { 
-      const { data } = await supabase.from('profiles').select('id, trade_count').gte('trade_count', 2).limit(5);
-      addResult('Auto-Verify Traders', '✅', `${data?.length || 0} users with 2+ trades (auto-verified)`);
-    } catch(e) { addResult('Auto-Verify Traders', '⚠️', e.message); }
+    // Test 4: Can COMMENT
+    add('💬', 'Comment', '⏳', 'Testing...');
+    if (testPostId) {
+      try {
+        const { data, error } = await supabase.from('comments').insert({ user_id: user.id, post_id: testPostId, content: `Test comment ${testId}` }).select().single();
+        if (error) setResults(prev => prev.map(r => r.name === 'Comment' ? { ...r, status: '❌', detail: `Comment INSERT failed: ${error.message}` } : r));
+        else {
+          setResults(prev => prev.map(r => r.name === 'Comment' ? { ...r, status: '✅', detail: 'Comment created + verified' } : r));
+          await supabase.from('comments').delete().eq('id', data.id);
+        }
+      } catch(e) { setResults(prev => prev.map(r => r.name === 'Comment' ? { ...r, status: '❌', detail: e.message } : r)); }
+    } else { setResults(prev => prev.map(r => r.name === 'Comment' ? { ...r, status: '⏭️', detail: 'Skipped' } : r)); }
 
-    // 20. Realtime
+    // Test 5: Can BOOKMARK
+    add('🔖', 'Bookmark', '⏳', 'Testing...');
+    if (testPostId) {
+      try {
+        const { error } = await supabase.from('bookmarks').insert({ user_id: user.id, post_id: testPostId });
+        if (error) setResults(prev => prev.map(r => r.name === 'Bookmark' ? { ...r, status: '❌', detail: error.message } : r));
+        else {
+          setResults(prev => prev.map(r => r.name === 'Bookmark' ? { ...r, status: '✅', detail: 'Bookmark saved + verified' } : r));
+          await supabase.from('bookmarks').delete().match({ user_id: user.id, post_id: testPostId });
+        }
+      } catch(e) { setResults(prev => prev.map(r => r.name === 'Bookmark' ? { ...r, status: '❌', detail: e.message } : r)); }
+    } else { setResults(prev => prev.map(r => r.name === 'Bookmark' ? { ...r, status: '⏭️', detail: 'Skipped' } : r)); }
+
+    // Test 6: Can UPDATE profile
+    add('👤', 'Update Profile', '⏳', 'Testing...');
     try {
-      const ch = supabase.channel('diag-test');
-      const sub = await new Promise((resolve) => {
-        ch.subscribe((status) => { resolve(status); });
-        setTimeout(() => resolve('timeout'), 3000);
-      });
-      supabase.removeChannel(ch);
-      addResult('Realtime', sub === 'SUBSCRIBED' ? '✅' : '⚠️', sub);
-    } catch(e) { addResult('Realtime', '❌', e.message); }
+      const { error } = await supabase.from('profiles').update({ last_seen: new Date().toISOString() }).eq('id', user.id);
+      setResults(prev => prev.map(r => r.name === 'Update Profile' ? { ...r, status: error ? '❌' : '✅', detail: error ? error.message : 'Profile update works' } : r));
+    } catch(e) { setResults(prev => prev.map(r => r.name === 'Update Profile' ? { ...r, status: '❌', detail: e.message } : r)); }
 
-    // 21. App resume handler
-    addResult('Auto-Reload (60s bg)', '✅', 'Active in layout.js');
-    addResult('Auth Resume Event', '✅', 'midashub:resumed dispatched on visibility change');
+    // Test 7: Can INSERT notification
+    add('🔔', 'Notification Insert', '⏳', 'Testing...');
+    try {
+      const { data, error } = await supabase.from('notifications').insert({ user_id: user.id, from_user_id: user.id, type: 'system', content: `[Test] ${testId}` }).select().single();
+      if (error) setResults(prev => prev.map(r => r.name === 'Notification Insert' ? { ...r, status: '❌', detail: error.message } : r));
+      else {
+        setResults(prev => prev.map(r => r.name === 'Notification Insert' ? { ...r, status: '✅', detail: 'Notification created' } : r));
+        await supabase.from('notifications').delete().eq('id', data.id);
+      }
+    } catch(e) { setResults(prev => prev.map(r => r.name === 'Notification Insert' ? { ...r, status: '❌', detail: e.message } : r)); }
 
-    // 22. Background posting
-    addResult('Background Posting', '✅', 'Media uploads in modal, DB insert in store');
+    // Test 8: Can INSERT feedback
+    add('💡', 'Feedback Insert', '⏳', 'Testing...');
+    try {
+      const { data, error } = await supabase.from('feedback').insert({ user_id: user.id, type: 'other', message: `[Test] ${testId}` }).select().single();
+      if (error) setResults(prev => prev.map(r => r.name === 'Feedback Insert' ? { ...r, status: '❌', detail: error.message } : r));
+      else {
+        setResults(prev => prev.map(r => r.name === 'Feedback Insert' ? { ...r, status: '✅', detail: 'Feedback created' } : r));
+        await supabase.from('feedback').delete().eq('id', data.id);
+      }
+    } catch(e) { setResults(prev => prev.map(r => r.name === 'Feedback Insert' ? { ...r, status: '❌', detail: e.message } : r)); }
+
+    // Test 9: Can INSERT session log
+    add('📍', 'Session Tracking', '⏳', 'Testing...');
+    try {
+      const { data, error } = await supabase.from('user_sessions').insert({ user_id: user.id, ip_address: 'test', device: 'test', browser: 'test', os: 'test' }).select().single();
+      if (error) setResults(prev => prev.map(r => r.name === 'Session Tracking' ? { ...r, status: '❌', detail: error.message } : r));
+      else {
+        setResults(prev => prev.map(r => r.name === 'Session Tracking' ? { ...r, status: '✅', detail: 'Session log works' } : r));
+        await supabase.from('user_sessions').delete().eq('id', data.id);
+      }
+    } catch(e) { setResults(prev => prev.map(r => r.name === 'Session Tracking' ? { ...r, status: '❌', detail: e.message } : r)); }
+
+    // Test 10: Push notification delivery
+    add('📱', 'Push Send', '⏳', 'Testing...');
+    try {
+      const res = await fetch('/api/push', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: user.id, title: '🔧 Test', body: 'Bug tester notification', url: '/admin' }) });
+      const d = await res.json();
+      setResults(prev => prev.map(r => r.name === 'Push Send' ? { ...r, status: d.sent > 0 ? '✅' : '⚠️', detail: `Sent: ${d.sent}, Total subs: ${d.total || 0}${d.errors?.length ? ', Errors: ' + d.errors.join(',') : ''}` } : r));
+    } catch(e) { setResults(prev => prev.map(r => r.name === 'Push Send' ? { ...r, status: '❌', detail: e.message } : r)); }
+
+    // Test 11: Media upload
+    add('📷', 'Media Upload', '⏳', 'Testing...');
+    try {
+      const blob = new Blob(['test'], { type: 'text/plain' });
+      const path = `test/${user.id}/bugtest-${Date.now()}.txt`;
+      const { data, error } = await supabase.storage.from('media').upload(path, blob);
+      if (error) setResults(prev => prev.map(r => r.name === 'Media Upload' ? { ...r, status: '❌', detail: error.message } : r));
+      else {
+        setResults(prev => prev.map(r => r.name === 'Media Upload' ? { ...r, status: '✅', detail: 'Upload + public URL works' } : r));
+        await supabase.storage.from('media').remove([path]);
+      }
+    } catch(e) { setResults(prev => prev.map(r => r.name === 'Media Upload' ? { ...r, status: '❌', detail: e.message } : r)); }
+
+    // Test 12: Auth refresh
+    add('🔄', 'Auth Refresh', '⏳', 'Testing...');
+    try {
+      const { refreshSession } = await import('@/lib/supabase-browser');
+      await refreshSession();
+      const { data: { session } } = await supabase.auth.getSession();
+      setResults(prev => prev.map(r => r.name === 'Auth Refresh' ? { ...r, status: session ? '✅' : '❌', detail: session ? 'Token refreshed successfully' : 'Refresh failed — session lost' } : r));
+    } catch(e) { setResults(prev => prev.map(r => r.name === 'Auth Refresh' ? { ...r, status: '❌', detail: e.message } : r)); }
+
+    // Test 13: After-refresh write (simulates background return)
+    add('🔁', 'Post-Refresh Write', '⏳', 'Testing after auth refresh...');
+    try {
+      const { error } = await supabase.from('profiles').update({ last_seen: new Date().toISOString() }).eq('id', user.id);
+      setResults(prev => prev.map(r => r.name === 'Post-Refresh Write' ? { ...r, status: error ? '❌' : '✅', detail: error ? `Write after refresh FAILED: ${error.message}` : 'Write after refresh works — no stale auth bug' } : r));
+    } catch(e) { setResults(prev => prev.map(r => r.name === 'Post-Refresh Write' ? { ...r, status: '❌', detail: e.message } : r)); }
+
+    // Clean up test post
+    if (testPostId) {
+      await supabase.from('posts').delete().eq('id', testPostId);
+      add('🧹', 'Cleanup', '✅', 'Test post deleted');
+    }
 
     setRunning(false); setDone(true);
   };
@@ -877,11 +956,16 @@ function DiagnosticsPanel({ supabase, user }) {
     <div className="space-y-4">
       <div className="text-center">
         <div className="text-4xl mb-2">🔧</div>
-        <h3 className="text-lg font-bold">System Diagnostics</h3>
-        <p className="text-xs text-white/30 mb-4">Tests all features, tables, APIs, and connections in real-time</p>
-        <button onClick={runAll} disabled={running} className="btn-primary px-8 py-3 text-sm disabled:opacity-30">
-          {running ? <><span className="animate-spin inline-block mr-2">⏳</span> Running {results.length} tests...</> : done ? '🔄 Run Again' : '▶️ Run All Tests'}
+        <h3 className="text-lg font-bold">System Diagnostics & Bug Tester</h3>
+        <p className="text-xs text-white/30 mb-4">Tests real operations against the database to find actual bugs</p>
+        <div className="flex gap-2 justify-center mb-4">
+          <button onClick={() => { setMode('system'); }} className={`text-xs px-4 py-2 rounded-lg ${mode === 'system' ? 'bg-[var(--accent)]/15 text-[var(--accent)] border border-[var(--accent)]/30' : 'bg-white/5 text-white/40'}`}>📊 System Check</button>
+          <button onClick={() => { setMode('bugs'); }} className={`text-xs px-4 py-2 rounded-lg ${mode === 'bugs' ? 'bg-[var(--accent)]/15 text-[var(--accent)] border border-[var(--accent)]/30' : 'bg-white/5 text-white/40'}`}>🐛 Bug Tester</button>
+        </div>
+        <button onClick={mode === 'system' ? runSystem : runBugs} disabled={running} className="btn-primary px-8 py-3 text-sm disabled:opacity-30">
+          {running ? <><span className="animate-spin inline-block mr-2">⏳</span> Running...</> : done ? '🔄 Run Again' : mode === 'system' ? '▶️ Run System Check' : '▶️ Run Bug Tests'}
         </button>
+        {mode === 'bugs' && <p className="text-[10px] text-white/20 mt-2">Creates test data, verifies it saved, then deletes it. Safe to run anytime.</p>}
       </div>
 
       {done && (
@@ -895,10 +979,12 @@ function DiagnosticsPanel({ supabase, user }) {
       {results.length > 0 && (
         <div className="space-y-1">
           {results.map((r, i) => (
-            <div key={i} className={`flex items-center gap-3 p-2.5 rounded-lg ${r.status === '✅' ? 'bg-green-500/5' : r.status === '⚠️' ? 'bg-yellow-500/5' : 'bg-red-500/5'}`}>
+            <div key={i} className={`flex items-start gap-2 p-2.5 rounded-lg ${r.status === '✅' ? 'bg-green-500/5' : r.status === '⚠️' ? 'bg-yellow-500/5' : r.status === '❌' ? 'bg-red-500/8' : 'bg-white/3'}`}>
               <span className="text-sm shrink-0">{r.status}</span>
-              <span className="text-xs font-semibold flex-shrink-0">{r.name}</span>
-              <span className="text-[10px] text-white/30 truncate flex-1 text-right">{r.detail}</span>
+              <div className="flex-1 min-w-0">
+                <div className="text-xs font-semibold">{r.cat && <span className="text-white/30 mr-1">[{r.cat}]</span>}{r.name}</div>
+                <div className="text-[10px] text-white/30 break-words">{r.detail}</div>
+              </div>
             </div>
           ))}
         </div>
@@ -906,3 +992,4 @@ function DiagnosticsPanel({ supabase, user }) {
     </div>
   );
 }
+
