@@ -228,10 +228,8 @@ function ChatInner() {
     setMessages([...msgsRef.current]);
     setTimeout(() => endRef.current?.scrollIntoView({ behavior: 'smooth' }), 30);
     try {
-      await ensureFreshAuth();
       const { error } = await sb.from('messages').insert({ conversation_id: activeConvo, sender_id: user.id, content: msg });
       if (error) {
-        // Retry once
         await ensureFreshAuth();
         await sb.from('messages').insert({ conversation_id: activeConvo, sender_id: user.id, content: msg });
       }

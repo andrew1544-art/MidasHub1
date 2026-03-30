@@ -66,10 +66,15 @@ export function isTokenStale() {
   return lastRefresh > 0 && Date.now() - lastRefresh > 300000;
 }
 
-// Ensure fresh auth before a write — call this before important operations
+// Ensure fresh auth before a write — lightweight check, never throws
 export async function ensureFreshAuth() {
   if (!client) return;
-  if (isTokenStale() || lastRefresh === 0) {
-    await refreshSession();
-  }
+  try {
+    // Just touch the session to keep it alive — fast and safe
+    const { data: { session } } = await client.auth.getSession();
+    if (session) { lastRefresh = Date.now(); return; }
+    // No session — try refresh
+    await client.auth.refreshSession();
+    lastRefresh = Date.now();
+  } catch(e) { /* Never block writes */ }
 }

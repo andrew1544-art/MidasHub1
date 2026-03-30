@@ -87,7 +87,6 @@ export default function ComposeModal() {
       setUploading(true);
       setUploadStatus(`Uploading ${mediaFiles.length} file${mediaFiles.length > 1 ? 's' : ''}...`);
       try {
-        await ensureFreshAuth();
         const supabase = createClient();
         const results = await Promise.all(mediaFiles.map(async (file) => {
           try {

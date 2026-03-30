@@ -342,8 +342,6 @@ export const useStore = create((set, get) => ({
     set({ postingInBackground: true });
 
     try {
-      // Ensure auth is fresh before writing
-      await ensureFreshAuth();
       let finalContent = content.trim();
       if (quote) {
         finalContent += `\n\n💬 Reposting @${quote.username}:\n"${quote.content.slice(0, 200)}${quote.content.length > 200 ? '...' : ''}"`;

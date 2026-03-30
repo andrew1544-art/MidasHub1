@@ -123,25 +123,25 @@ function CommentItem({ comment, postOwnerId, onDelete }) {
   const saveEdit = async () => {
     if (!editText.trim() || saving) return;
     setSaving(true);
-    try {
+    const supabase = createClient();
+    const { error } = await supabase.from('comments').update({ content: editText.trim() }).eq('id', comment.id);
+    if (!error) { setDisplayText(editText.trim()); setEditing(false); showToast?.('Comment updated ✓'); }
+    else {
       await ensureFreshAuth();
-      const supabase = createClient();
-      const { error } = await supabase.from('comments').update({ content: editText.trim() }).eq('id', comment.id);
-      if (!error) { setDisplayText(editText.trim()); setEditing(false); showToast?.('Comment updated ✓'); }
-      else { await ensureFreshAuth(); const { error: e2 } = await supabase.from('comments').update({ content: editText.trim() }).eq('id', comment.id); if (!e2) { setDisplayText(editText.trim()); setEditing(false); showToast?.('Comment updated ✓'); } else showToast?.('Failed to update'); }
-    } catch (e) { showToast?.('Error saving'); }
+      const { error: e2 } = await supabase.from('comments').update({ content: editText.trim() }).eq('id', comment.id);
+      if (!e2) { setDisplayText(editText.trim()); setEditing(false); showToast?.('Comment updated ✓'); }
+      else showToast?.('Failed to update');
+    }
     setSaving(false);
   };
 
   const handleDelete = async () => {
     if (!confirm('Delete this comment?')) return;
-    try {
-      await ensureFreshAuth();
-      const supabase = createClient();
-      await supabase.from('comments').delete().eq('id', comment.id);
-      onDelete?.(comment.id);
-      showToast?.('Comment deleted');
-    } catch (e) { showToast?.('Failed to delete'); }
+    const supabase = createClient();
+    const { error } = await supabase.from('comments').delete().eq('id', comment.id);
+    if (error) { await ensureFreshAuth(); await supabase.from('comments').delete().eq('id', comment.id); }
+    onDelete?.(comment.id);
+    showToast?.('Comment deleted');
   };
 
   return (
@@ -231,46 +231,41 @@ export default function PostCard({ post, onPostUpdated }) {
 
   const handleLike = async () => {
     if (!user) return useStore.getState().setShowAuth(true);
-    await ensureFreshAuth();
     const supabase = createClient();
     if (liked) {
       setLiked(false); setLikesCount(c => c - 1);
-      try {
-        const { error } = await supabase.from('likes').delete().match({ user_id: user.id, post_id: post.id });
-        if (error) { await ensureFreshAuth(); await supabase.from('likes').delete().match({ user_id: user.id, post_id: post.id }).catch(() => {}); }
-      } catch (e) { setLiked(true); setLikesCount(c => c + 1); }
+      const { error } = await supabase.from('likes').delete().match({ user_id: user.id, post_id: post.id });
+      if (error) {
+        await ensureFreshAuth();
+        await supabase.from('likes').delete().match({ user_id: user.id, post_id: post.id });
+      }
     } else {
       setLiked(true); setLikesCount(c => c + 1);
-      try {
-        const { error } = await supabase.from('likes').insert({ user_id: user.id, post_id: post.id });
-        if (error) {
-          // Retry with fresh auth
-          await ensureFreshAuth();
-          const { error: retryErr } = await supabase.from('likes').insert({ user_id: user.id, post_id: post.id });
-          if (retryErr) { setLiked(false); setLikesCount(c => c - 1); return; }
-        }
-        if (post.user_id !== user.id) sendNotification({ toUserId: post.user_id, fromUserId: user.id, type: 'like', referenceId: post.id, content: 'liked your post ❤️' });
-      } catch (e) { setLiked(false); setLikesCount(c => c - 1); }
+      const { error } = await supabase.from('likes').insert({ user_id: user.id, post_id: post.id });
+      if (error) {
+        if (error.code === '23505') return; // already liked
+        await ensureFreshAuth();
+        const { error: e2 } = await supabase.from('likes').insert({ user_id: user.id, post_id: post.id });
+        if (e2 && e2.code !== '23505') { setLiked(false); setLikesCount(c => c - 1); return; }
+      }
+      if (post.user_id !== user.id) sendNotification({ toUserId: post.user_id, fromUserId: user.id, type: 'like', referenceId: post.id, content: 'liked your post ❤️' });
     }
   };
 
   const handleRepost = async () => {
     if (!user) return useStore.getState().setShowAuth(true);
     if (reposted) { showToast?.('Already reposted'); setShowRepostMenu(false); return; }
-    try {
+    const supabase = createClient();
+    const { error } = await supabase.from('reposts').insert({ user_id: user.id, post_id: post.id });
+    if (error) {
+      if (error.code === '23505') { setReposted(true); setShowRepostMenu(false); return; }
       await ensureFreshAuth();
-      const supabase = createClient();
-      const { error } = await supabase.from('reposts').insert({ user_id: user.id, post_id: post.id });
-      if (error && error.code === '23505') { showToast?.('Already reposted'); setReposted(true); setShowRepostMenu(false); return; }
-      if (error) {
-        await ensureFreshAuth();
-        const { error: retryErr } = await supabase.from('reposts').insert({ user_id: user.id, post_id: post.id });
-        if (retryErr) { showToast?.('Repost failed'); return; }
-      }
-      setReposted(true); setRepostsCount(c => c + 1); setShowRepostMenu(false);
-      showToast?.('Reposted ✓');
-      sendNotification({ toUserId: post.user_id, fromUserId: user.id, type: 'repost', referenceId: post.id, content: 'reposted your post 🔄' });
-    } catch (e) { showToast?.('Could not repost'); }
+      const { error: e2 } = await supabase.from('reposts').insert({ user_id: user.id, post_id: post.id });
+      if (e2) { showToast?.('Repost failed'); return; }
+    }
+    setReposted(true); setRepostsCount(c => c + 1); setShowRepostMenu(false);
+    showToast?.('Reposted ✓');
+    if (post.user_id !== user.id) sendNotification({ toUserId: post.user_id, fromUserId: user.id, type: 'repost', referenceId: post.id, content: 'reposted your post 🔄' });
   };
 
   const handleRepostWithComment = () => {
@@ -284,25 +279,22 @@ export default function PostCard({ post, onPostUpdated }) {
 
   const handleBookmark = async () => {
     if (!user) return useStore.getState().setShowAuth(true);
-    await ensureFreshAuth();
     const supabase = createClient();
-    try {
-      if (bookmarked) {
-        setBookmarked(false);
-        const { error } = await supabase.from('bookmarks').delete().match({ user_id: user.id, post_id: post.id });
-        if (error) { await ensureFreshAuth(); await supabase.from('bookmarks').delete().match({ user_id: user.id, post_id: post.id }); }
-        showToast?.('Removed from saved');
-      } else {
-        setBookmarked(true);
-        const { error } = await supabase.from('bookmarks').insert({ user_id: user.id, post_id: post.id });
-        if (error) {
-          await ensureFreshAuth();
-          const { error: retryErr } = await supabase.from('bookmarks').insert({ user_id: user.id, post_id: post.id });
-          if (retryErr) { setBookmarked(false); return; }
-        }
-        showToast?.('Saved ✓');
+    if (bookmarked) {
+      setBookmarked(false);
+      const { error } = await supabase.from('bookmarks').delete().match({ user_id: user.id, post_id: post.id });
+      if (error) { await ensureFreshAuth(); await supabase.from('bookmarks').delete().match({ user_id: user.id, post_id: post.id }); }
+      showToast?.('Removed from saved');
+    } else {
+      setBookmarked(true);
+      const { error } = await supabase.from('bookmarks').insert({ user_id: user.id, post_id: post.id });
+      if (error) {
+        await ensureFreshAuth();
+        const { error: e2 } = await supabase.from('bookmarks').insert({ user_id: user.id, post_id: post.id });
+        if (e2) { setBookmarked(false); return; }
       }
-    } catch (e) {}
+      showToast?.('Saved ✓');
+    }
   };
 
   const loadComments = async () => {
@@ -322,34 +314,31 @@ export default function PostCard({ post, onPostUpdated }) {
     if (!commentText.trim() || !user) return;
     const text = commentText.trim();
     setCommentText('');
-    try {
+    const supabase = createClient();
+    let { data, error } = await supabase.from('comments').insert({ user_id: user.id, post_id: post.id, content: text }).select('*, profiles(*)').single();
+    if (error) {
       await ensureFreshAuth();
-      const supabase = createClient();
-      let { data, error } = await supabase.from('comments').insert({ user_id: user.id, post_id: post.id, content: text }).select('*, profiles(*)').single();
-      if (error) {
-        await ensureFreshAuth();
-        const retry = await supabase.from('comments').insert({ user_id: user.id, post_id: post.id, content: text }).select('*, profiles(*)').single();
-        if (retry.error) { showToast?.('Comment failed'); setCommentText(text); return; }
-        data = retry.data;
+      const retry = await supabase.from('comments').insert({ user_id: user.id, post_id: post.id, content: text }).select('*, profiles(*)').single();
+      if (retry.error) { showToast?.('Comment failed'); setCommentText(text); return; }
+      data = retry.data;
+    }
+    if (data) {
+      setComments(prev => [...prev, data]);
+      setCommentsCount(c => c + 1);
+      sendNotification({ toUserId: post.user_id, fromUserId: user.id, type: 'comment', referenceId: post.id, content: `commented: "${text.slice(0, 60)}" 💬` });
+      const mentions = text.match(/@([a-zA-Z0-9_]+)/g);
+      if (mentions) {
+        const usernames = [...new Set(mentions.map(m => m.slice(1).toLowerCase()))];
+        try {
+          const { data: mentioned } = await supabase.from('profiles').select('id, username').in('username', usernames);
+          (mentioned || []).forEach(m => {
+            if (m.id !== user.id && m.id !== post.user_id) {
+              sendNotification({ toUserId: m.id, fromUserId: user.id, type: 'comment', referenceId: post.id, content: `mentioned you: "${text.slice(0, 60)}" 💬` });
+            }
+          });
+        } catch(e) {}
       }
-      if (data) {
-        setComments(prev => [...prev, data]);
-        setCommentsCount(c => c + 1);
-        sendNotification({ toUserId: post.user_id, fromUserId: user.id, type: 'comment', referenceId: post.id, content: `commented: "${text.slice(0, 60)}" 💬` });
-        const mentions = text.match(/@([a-zA-Z0-9_]+)/g);
-        if (mentions) {
-          const usernames = [...new Set(mentions.map(m => m.slice(1).toLowerCase()))];
-          try {
-            const { data: mentioned } = await supabase.from('profiles').select('id, username').in('username', usernames);
-            (mentioned || []).forEach(m => {
-              if (m.id !== user.id && m.id !== post.user_id) {
-                sendNotification({ toUserId: m.id, fromUserId: user.id, type: 'comment', referenceId: post.id, content: `mentioned you: "${text.slice(0, 60)}" 💬` });
-              }
-            });
-          } catch(e) {}
-        }
-      }
-    } catch (e) { setCommentText(text); }
+    }
   };
 
   // Handle @mention autocomplete in comments
@@ -395,12 +384,10 @@ export default function PostCard({ post, onPostUpdated }) {
 
   const deletePost = async () => {
     if (!confirm('Delete this post permanently?')) return;
-    try {
-      await ensureFreshAuth();
-      const supabase = createClient();
-      await supabase.from('posts').delete().eq('id', post.id);
-      showToast?.('Post deleted'); onPostUpdated?.();
-    } catch (e) { showToast?.('Failed to delete'); }
+    const supabase = createClient();
+    const { error } = await supabase.from('posts').delete().eq('id', post.id);
+    if (error) { await ensureFreshAuth(); await supabase.from('posts').delete().eq('id', post.id); }
+    showToast?.('Post deleted'); onPostUpdated?.();
   };
 
   const shareToSocial = (platform) => {

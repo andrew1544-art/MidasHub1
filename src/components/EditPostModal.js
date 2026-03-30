@@ -67,7 +67,6 @@ export default function EditPostModal({ post, onClose, onSaved }) {
     if (!content.trim() || saving) return;
     setSaving(true); setError('');
     try {
-      await ensureFreshAuth();
       const supabase = createClient();
       let uploadedUrls = [];
       if (newMediaFiles.length) {
