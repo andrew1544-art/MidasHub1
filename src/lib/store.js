@@ -179,6 +179,7 @@ export const useStore = create((set, get) => ({
         const profile = await loadProfile(supabase, session.user.id);
         set({ user: session.user, profile, loading: false });
         clearTimeout(safetyTimeout);
+        try { localStorage.setItem('mh-logged-in', '1'); } catch(e) {}
         // Background tasks - don't block UI
         requestNotifPermission();
         startHeartbeat(supabase, session.user.id);
@@ -276,6 +277,7 @@ export const useStore = create((set, get) => ({
       if (error) return { error: { message: friendlyError(error.message) } };
       const profile = await loadProfile(supabase, data.user.id);
       set({ user: data.user, profile, showAuth: false });
+      try { localStorage.setItem('mh-logged-in', '1'); } catch(e) {}
       get().showToast('Welcome back! ⚡');
       return { data };
     } catch (err) { return { error: { message: 'Connection error.' } }; }
@@ -285,6 +287,7 @@ export const useStore = create((set, get) => ({
     const supabase = getSupabase();
     if (supabase) { try { await supabase.auth.signOut(); } catch (e) {} }
     if (heartbeatInterval) clearInterval(heartbeatInterval);
+    try { localStorage.removeItem('mh-logged-in'); } catch(e) {}
     set({ user: null, profile: null });
   },
 

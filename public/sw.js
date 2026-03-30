@@ -1,8 +1,6 @@
-const V = 'v9';
+const V = 'v10';
 
-self.addEventListener('install', () => {
-  self.skipWaiting();
-});
+self.addEventListener('install', () => self.skipWaiting());
 
 self.addEventListener('activate', (e) => {
   e.waitUntil(
@@ -18,9 +16,9 @@ self.addEventListener('message', (e) => {
   }
 });
 
-// NO fetch handler — browser handles all requests directly
-// This prevents caching broken/error pages
+// NO fetch handler — prevents caching issues
 
+// PUSH notifications
 self.addEventListener('push', (e) => {
   let data = { title: 'MidasHub', body: 'You have a new notification' };
   try { if (e.data) data = { ...data, ...e.data.json() }; } catch(err) { if (e.data) data.body = e.data.text(); }
@@ -35,11 +33,11 @@ self.addEventListener('notificationclick', (e) => {
   e.notification.close();
   const url = e.notification.data?.url || '/feed';
   e.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
       for (const c of list) {
         if (c.url.includes(self.location.origin)) { c.focus(); c.navigate(url); return; }
       }
-      return clients.openWindow(url);
+      return self.clients.openWindow(url);
     })
   );
 });

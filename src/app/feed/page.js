@@ -28,8 +28,13 @@ function FeedInner() {
   const [joining, setJoining] = useState(false);
   const [hasDraft, setHasDraft] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [showAppBanner, setShowAppBanner] = useState(false);
   useEffect(() => {
     try { setHasDraft(!!sessionStorage.getItem('mh-draft')); } catch(e) {}
+    // Show "Open in App" if user is in browser but has PWA installed
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+    const dismissed = localStorage.getItem('mh-app-banner-dismiss');
+    if (!isStandalone && !dismissed) setShowAppBanner(true);
   }, []);
   const [pullDistance, setPullDistance] = useState(0);
   const touchStartY = useRef(0);
@@ -321,6 +326,19 @@ function FeedInner() {
             </div>
           </div>
         )}
+        {/* Open in App banner */}
+        {showAppBanner && (
+          <div className="glass-light rounded-2xl p-3 mb-3 flex items-center gap-3">
+            <span className="text-2xl">⚡</span>
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-bold">MidasHub App</div>
+              <div className="text-[10px] text-white/30">Open in the app for a better experience</div>
+            </div>
+            <button onClick={() => { window.location.href = window.location.href; }} className="btn-primary px-3 py-1.5 text-xs shrink-0">Open App</button>
+            <button onClick={() => { setShowAppBanner(false); try { localStorage.setItem('mh-app-banner-dismiss', Date.now().toString()); } catch(e) {} }} className="text-white/20 text-xs shrink-0">✕</button>
+          </div>
+        )}
+
         {/* Compose bar (logged in) */}
         {user && (
           <div className="glass-light rounded-2xl p-4 mb-5">

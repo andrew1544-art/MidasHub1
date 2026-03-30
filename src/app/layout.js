@@ -66,7 +66,7 @@ export default function RootLayout({ children }) {
           if ('caches' in window) { caches.keys().then(function(k) { k.forEach(function(c) { caches.delete(c); }); }); }
           // Register/update SW — cache-bust to ensure latest version
           if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('/sw.js?v=9').then(function(r) {
+            navigator.serviceWorker.register('/sw.js?v=10').then(function(r) {
               r.update();
               if (r.waiting) { r.waiting.postMessage({ type: 'SKIP_WAITING' }); }
               r.addEventListener('updatefound', function() {

@@ -3,10 +3,15 @@
   "short_name": "MidasHub",
   "description": "All your socials, one place. Zero limits.",
   "start_url": "/feed",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#0a0a0f",
   "theme_color": "#FFD700",
   "orientation": "portrait",
+  "handle_links": "preferred",
+  "launch_handler": {
+    "client_mode": "navigate-existing"
+  },
   "icons": [
     {
       "src": "/icon-192.png",
@@ -20,5 +25,14 @@
       "type": "image/png",
       "purpose": "any maskable"
     }
-  ]
+  ],
+  "share_target": {
+    "action": "/feed",
+    "method": "GET",
+    "params": {
+      "url": "share_url",
+      "text": "share_text",
+      "title": "share_title"
+    }
+  }
 }

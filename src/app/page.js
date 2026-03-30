@@ -32,6 +32,21 @@ function HomeInner() {
   useEffect(() => { if (user) router.push('/feed'); }, [user, router]);
   useEffect(() => { if (searchParams.get('verified') === 'true') setShowAuth(true, 'login'); }, [searchParams, setShowAuth]);
 
+  // Returning user — skip landing, go to feed
+  useEffect(() => {
+    if (!mounted) return;
+    // If URL has trade or referral params, go to feed with them
+    const joinTrade = searchParams.get('join_trade');
+    const ref = searchParams.get('ref') || searchParams.get('referral');
+    if (joinTrade) { router.push(`/feed?join_trade=${joinTrade}`); return; }
+    if (ref) { try { localStorage.setItem('midashub-ref', ref.toUpperCase()); } catch(e) {} router.push('/feed'); return; }
+    // Returning user — skip landing
+    try {
+      const wasLoggedIn = localStorage.getItem('mh-logged-in');
+      if (wasLoggedIn) router.push('/feed');
+    } catch(e) {}
+  }, [mounted]);
+
   useEffect(() => {
     if (!mounted) return;
     const timer = setInterval(() => {
