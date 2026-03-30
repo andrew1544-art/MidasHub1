@@ -4,7 +4,7 @@ import { useSearchParams } from 'next/navigation';
 import AppShell from '@/components/AppShell';
 import PostCard from '@/components/PostCard';
 import { useStore } from '@/lib/store';
-import { createClient } from '@/lib/supabase-browser';
+import { createClient, ensureFreshAuth } from '@/lib/supabase-browser';
 import { PLATFORM_LIST } from '@/lib/constants';
 
 function FeedInner() {
@@ -49,52 +49,49 @@ function FeedInner() {
   useEffect(() => { postsCountRef.current = posts.length; }, [posts.length]);
 
   const fetchPosts = useCallback(async (pageNum = 0, append = false) => {
-    try {
-      const supabase = createClient();
-      let query = supabase.from('posts').select('*, profiles(*)').order('created_at', { ascending: false }).range(pageNum * PAGE_SIZE, (pageNum + 1) * PAGE_SIZE - 1);
-      if (filter !== 'all') query = query.eq('source_platform', filter);
-      if (!user) query = query.eq('is_public', true);
-      let { data, error } = await query;
+    const supabase = createClient();
+    const buildQuery = () => {
+      let q = supabase.from('posts').select('*, profiles(*)').order('created_at', { ascending: false }).range(pageNum * PAGE_SIZE, (pageNum + 1) * PAGE_SIZE - 1);
+      if (filter !== 'all') q = q.eq('source_platform', filter);
+      if (!user) q = q.eq('is_public', true);
+      return q;
+    };
 
-      // If query failed OR returned empty when we have posts — connection is stale
+    try {
+      let { data, error } = await buildQuery();
+
+      // Retry once if failed or suspiciously empty
       if (error || (pageNum === 0 && !append && (!data || data.length === 0) && postsCountRef.current > 0)) {
-        // Refresh auth and retry
-        const { ensureFreshAuth } = await import('@/lib/supabase-browser');
         await ensureFreshAuth();
-        const retry = await supabase.from('posts').select('*, profiles(*)').order('created_at', { ascending: false }).range(pageNum * PAGE_SIZE, (pageNum + 1) * PAGE_SIZE - 1);
-        if (retry.data && retry.data.length > 0) {
-          data = retry.data;
-          error = null;
-        } else {
-          // Still failing — keep existing posts, don't blank the screen
-          setLoading(false); setLoadingMore(false); loadingMoreRef.current = false;
-          setRefreshing(false);
-          return;
-        }
+        const retry = await buildQuery();
+        if (retry.data?.length > 0) { data = retry.data; error = null; }
+        else { setLoading(false); setLoadingMore(false); loadingMoreRef.current = false; setRefreshing(false); return; }
       }
 
-      if (data && data.length > 0) {
+      if (data?.length > 0) {
+        // Check liked/bookmarked/reposted
         if (user) {
-          const ids = data.map(p => p.id);
-          const [lr, br, rr] = await Promise.all([
-            supabase.from('likes').select('post_id').eq('user_id', user.id).in('post_id', ids),
-            supabase.from('bookmarks').select('post_id').eq('user_id', user.id).in('post_id', ids),
-            supabase.from('reposts').select('post_id').eq('user_id', user.id).in('post_id', ids),
-          ]);
-          const liked = new Set((lr.data||[]).map(l=>l.post_id));
-          const bk = new Set((br.data||[]).map(b=>b.post_id));
-          const rp = new Set((rr.data||[]).map(r=>r.post_id));
-          data.forEach(p => { p.user_liked = liked.has(p.id); p.user_bookmarked = bk.has(p.id); p.user_reposted = rp.has(p.id); });
+          try {
+            const ids = data.map(p => p.id);
+            const [lr, br, rr] = await Promise.all([
+              supabase.from('likes').select('post_id').eq('user_id', user.id).in('post_id', ids),
+              supabase.from('bookmarks').select('post_id').eq('user_id', user.id).in('post_id', ids),
+              supabase.from('reposts').select('post_id').eq('user_id', user.id).in('post_id', ids),
+            ]);
+            const liked = new Set((lr.data||[]).map(l=>l.post_id));
+            const bk = new Set((br.data||[]).map(b=>b.post_id));
+            const rp = new Set((rr.data||[]).map(r=>r.post_id));
+            data.forEach(p => { p.user_liked = liked.has(p.id); p.user_bookmarked = bk.has(p.id); p.user_reposted = rp.has(p.id); });
+          } catch(e) {} // Don't fail the whole load if like-check fails
         }
         append ? setPosts(prev => [...prev, ...data]) : setPosts(data);
         const more = data.length === PAGE_SIZE;
         setHasMore(more); hasMoreRef.current = more;
       } else if (pageNum === 0 && !append && postsCountRef.current === 0) {
-        // Genuinely no posts (first load, empty DB)
         setPosts([]);
       }
     } catch (e) { /* Keep existing posts on error */ }
-    setLoading(false); setLoadingMore(false); loadingMoreRef.current = false;
+    setLoading(false); setLoadingMore(false); loadingMoreRef.current = false; setRefreshing(false);
   }, [filter, user]);
 
   // Load on filter change

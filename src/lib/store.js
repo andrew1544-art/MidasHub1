@@ -223,28 +223,27 @@ export const useStore = create((set, get) => ({
           return;
         }
         const away = Date.now() - lastHidden;
+        if (away < 2000) return; // ignore quick switches
         const { user: currentUser } = get();
         if (!currentUser) return;
 
+        // Refresh auth with timeout — never hang more than 3s
         try {
-          // Ensure auth token is fresh before any operations
           await ensureFreshAuth();
-          const { data: { session } } = await supabase.auth.getSession();
-          if (session?.user) {
-            supabase.from('profiles').update({ last_seen: new Date().toISOString() }).eq('id', session.user.id).then(() => {});
-            if (away > 5000) {
-              get().fetchNotifications?.();
-              get().fetchUnreadChats?.();
-            }
-            // Tell all pages to refetch AFTER auth is refreshed
-            window.dispatchEvent(new Event('midashub:resumed'));
-          } else {
-            set({ user: null, profile: null });
-          }
-        } catch(e) {
-          // If getSession fails, just try heartbeat
+        } catch(e) {}
+
+        // Always dispatch resumed — even if auth refresh failed
+        // Pages will try their own queries and retry if needed
+        window.dispatchEvent(new Event('midashub:resumed'));
+
+        // Background updates — fire and forget
+        try {
           supabase.from('profiles').update({ last_seen: new Date().toISOString() }).eq('id', currentUser.id).then(() => {});
-        }
+          if (away > 5000) {
+            get().fetchNotifications?.();
+            get().fetchUnreadChats?.();
+          }
+        } catch(e) {}
       });
     }
   },

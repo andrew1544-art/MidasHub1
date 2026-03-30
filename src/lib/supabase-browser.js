@@ -30,37 +30,36 @@ export function createClient() {
   return client;
 }
 
-// Force refresh the auth session
-export async function refreshSession() {
+// Helper: run a promise with a timeout — never hang
+function withTimeout(promise, ms) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), ms))
+  ]);
+}
+
+// Ensure fresh auth — with 2s timeout so it never blocks the UI
+export async function ensureFreshAuth() {
   if (!client) return;
   try {
-    // Always do a full refresh to get a new token
-    const { data: { session } } = await client.auth.refreshSession();
-    if (session) {
-      lastRefresh = Date.now();
-      return true;
-    }
-    // If refreshSession fails, try getSession
-    const { data: { session: s2 } } = await client.auth.getSession();
-    if (s2) { lastRefresh = Date.now(); return true; }
+    const { data: { session } } = await withTimeout(client.auth.getSession(), 2000);
+    if (session) { lastRefresh = Date.now(); return; }
+    // No session — try refresh with timeout
+    await withTimeout(client.auth.refreshSession(), 3000);
+    lastRefresh = Date.now();
+  } catch(e) { /* Timed out or failed — don't block */ }
+}
+
+// Force full refresh
+export async function refreshSession() {
+  if (!client) return false;
+  try {
+    const { data } = await withTimeout(client.auth.refreshSession(), 3000);
+    if (data?.session) { lastRefresh = Date.now(); return true; }
     return false;
   } catch(e) { return false; }
 }
 
-// Check if token is likely stale (hasn't been refreshed in 5+ minutes)
 export function isTokenStale() {
   return lastRefresh > 0 && Date.now() - lastRefresh > 300000;
-}
-
-// Ensure fresh auth before a write — lightweight check, never throws
-export async function ensureFreshAuth() {
-  if (!client) return;
-  try {
-    // Just touch the session to keep it alive — fast and safe
-    const { data: { session } } = await client.auth.getSession();
-    if (session) { lastRefresh = Date.now(); return; }
-    // No session — try refresh
-    await client.auth.refreshSession();
-    lastRefresh = Date.now();
-  } catch(e) { /* Never block writes */ }
 }

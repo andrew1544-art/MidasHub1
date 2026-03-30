@@ -5,7 +5,6 @@ export const metadata = {
   description: 'The ultimate social hub. See every post from every platform in one feed. No restrictions, no limits. Join free.',
   keywords: 'social media, hub, aggregator, facebook, instagram, snapchat, tiktok, twitter',
   manifest: '/manifest.json',
-  themeColor: '#FFD700',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
