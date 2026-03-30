@@ -40,7 +40,29 @@ export default function RootLayout({ children }) {
       <body className="antialiased">
         {children}
         <script dangerouslySetInnerHTML={{ __html: `
-          // Clear all caches
+          // SELF-HEALING: Detect broken cache/error state and auto-recover
+          try {
+            // If referrer is chrome-error, we loaded from a cached error page
+            if (document.referrer.indexOf('chrome-error') > -1 || 
+                document.referrer.indexOf('chromewebdata') > -1) {
+              // Nuclear: clear everything and reload
+              if (navigator.serviceWorker) navigator.serviceWorker.getRegistrations().then(function(r){r.forEach(function(reg){reg.unregister()})});
+              if (window.caches) caches.keys().then(function(k){k.forEach(function(c){caches.delete(c)})});
+              sessionStorage.clear();
+              setTimeout(function(){ location.replace('/feed'); }, 500);
+            }
+          } catch(e) {}
+
+          // Global error handler — if app crashes badly, offer recovery
+          window.addEventListener('error', function(e) {
+            if (e.message && (e.message.indexOf('ChunkLoadError') > -1 || e.message.indexOf('Loading chunk') > -1)) {
+              // Stale JS chunks — clear SW cache and reload
+              if (window.caches) caches.keys().then(function(k){k.forEach(function(c){caches.delete(c)})});
+              setTimeout(function(){ location.reload(); }, 200);
+            }
+          });
+
+          // Clear all caches on load
           if ('caches' in window) { caches.keys().then(function(k) { k.forEach(function(c) { caches.delete(c); }); }); }
           // Register/update SW — cache-bust to ensure latest version
           if ('serviceWorker' in navigator) {

@@ -7,7 +7,6 @@ const nextConfig = {
   },
   headers: async () => [
     {
-      // Never cache the service worker — always get latest
       source: '/sw.js',
       headers: [
         { key: 'Cache-Control', value: 'no-cache, no-store, must-revalidate' },
@@ -15,7 +14,13 @@ const nextConfig = {
       ],
     },
     {
-      source: '/((?!_next/static|_next/image|icon|manifest|sw).*)',
+      source: '/recover.html',
+      headers: [
+        { key: 'Cache-Control', value: 'no-cache, no-store, must-revalidate' },
+      ],
+    },
+    {
+      source: '/((?!_next/static|_next/image|icon|manifest|sw|recover).*)',
       headers: [
         { key: 'Cache-Control', value: 'no-cache, no-store, must-revalidate' },
       ],

@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MidasHub — Recovering...</title>
+<style>
+  body{background:#0a0a0a;color:#fff;font-family:system-ui;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;text-align:center}
+  .box{padding:2rem}
+  h2{font-size:1.3rem;margin-bottom:.5rem}
+  p{color:#888;font-size:.85rem}
+  .spin{animation:s 1s linear infinite;font-size:2rem}
+  @keyframes s{to{transform:rotate(360deg)}}
+  button{background:#d4a017;color:#000;border:none;padding:12px 32px;border-radius:12px;font-weight:700;font-size:.9rem;margin-top:1rem;cursor:pointer}
+</style>
+</head><body>
+<div class="box">
+  <div class="spin" id="icon">⏳</div>
+  <h2 id="msg">Recovering app...</h2>
+  <p id="sub">Clearing cached data and reloading</p>
+  <button id="btn" style="display:none" onclick="location.href='/'">Open MidasHub</button>
+</div>
+<script>
+(async function(){
+  try {
+    // 1. Unregister ALL service workers
+    if (navigator.serviceWorker) {
+      var regs = await navigator.serviceWorker.getRegistrations();
+      for (var r of regs) await r.unregister();
+    }
+    // 2. Clear ALL caches
+    if (window.caches) {
+      var keys = await caches.keys();
+      for (var k of keys) await caches.delete(k);
+    }
+    // 3. Clear sessionStorage
+    try { sessionStorage.clear(); } catch(e){}
+
+    document.getElementById('icon').textContent = '✅';
+    document.getElementById('msg').textContent = 'App recovered!';
+    document.getElementById('sub').textContent = 'Redirecting...';
+    
+    // 4. Redirect to app
+    setTimeout(function(){ location.href = '/feed'; }, 1000);
+  } catch(e) {
+    document.getElementById('icon').textContent = '⚠️';
+    document.getElementById('msg').textContent = 'Manual clear needed';
+    document.getElementById('sub').textContent = 'Go to Chrome Settings → Site Settings → midashub.sbs → Clear & Reset';
+    document.getElementById('btn').style.display = 'inline-block';
+  }
+})();
+</script>
+</body></html>
