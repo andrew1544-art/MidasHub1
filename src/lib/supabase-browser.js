@@ -27,20 +27,6 @@ export function createClient() {
     },
   });
 
-  // Proactive token keepalive — refresh every 4 minutes
-  // Supabase tokens expire in ~60 min, but mobile browsers freeze JS timers
-  // so the token can be stale when user returns. This keeps it alive.
-  if (typeof document !== 'undefined') {
-    setInterval(async () => {
-      try {
-        if (document.visibilityState === 'visible') {
-          await client.auth.getSession();
-          lastRefresh = Date.now();
-        }
-      } catch(e) {}
-    }, 240000); // 4 minutes
-  }
-
   return client;
 }
 

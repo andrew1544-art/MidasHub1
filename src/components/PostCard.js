@@ -192,6 +192,21 @@ export default function PostCard({ post, onPostUpdated }) {
   const [reposted, setReposted] = useState(post.user_reposted || false);
   const [repostsCount, setRepostsCount] = useState(post.reposts_count || 0);
   const [bookmarked, setBookmarked] = useState(post.user_bookmarked || false);
+
+  // Sync state when post data changes (e.g. feed reload after background return)
+  useEffect(() => {
+    setLiked(post.user_liked || false);
+    setLikesCount(post.likes_count || 0);
+    setReposted(post.user_reposted || false);
+    setRepostsCount(post.reposts_count || 0);
+    setBookmarked(post.user_bookmarked || false);
+    setCommentsCount(post.comments_count || 0);
+    setDisplayContent(post.content);
+    setDisplayMedia(post.media_urls || []);
+    setDisplayTags(post.tags || []);
+    setDisplayPublic(post.is_public !== false);
+    setDisplayPlatform(post.source_platform);
+  }, [post.id, post.user_liked, post.likes_count, post.user_reposted, post.reposts_count, post.user_bookmarked, post.comments_count, post.content, post.updated_at]);
   const [showComments, setShowComments] = useState(false);
   const [comments, setComments] = useState([]);
   const [commentText, setCommentText] = useState('');

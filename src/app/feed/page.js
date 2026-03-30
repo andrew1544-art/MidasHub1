@@ -33,13 +33,25 @@ function FeedInner() {
       if (!user) query = query.eq('is_public', true);
       const { data, error } = await query;
       if (error) {
-        console.warn('Feed query failed, retrying...', error.message);
-        // Retry once after a short delay (auth token might need refreshing)
         await new Promise(r => setTimeout(r, 500));
+        const { ensureFreshAuth } = await import('@/lib/supabase-browser');
+        await ensureFreshAuth();
         const retry = await supabase.from('posts').select('*, profiles(*)').order('created_at', { ascending: false }).range(pageNum * PAGE_SIZE, (pageNum + 1) * PAGE_SIZE - 1);
         if (retry.error || !retry.data) { setLoading(false); setLoadingMore(false); loadingMoreRef.current = false; return; }
-        // Use retry data
         const data2 = retry.data;
+        // Check liked/bookmarked/reposted for retry data too
+        if (user && data2.length) {
+          const ids = data2.map(p => p.id);
+          const [lr, br, rr] = await Promise.all([
+            supabase.from('likes').select('post_id').eq('user_id', user.id).in('post_id', ids),
+            supabase.from('bookmarks').select('post_id').eq('user_id', user.id).in('post_id', ids),
+            supabase.from('reposts').select('post_id').eq('user_id', user.id).in('post_id', ids),
+          ]);
+          const liked = new Set((lr.data||[]).map(l=>l.post_id));
+          const bk = new Set((br.data||[]).map(b=>b.post_id));
+          const rp = new Set((rr.data||[]).map(r=>r.post_id));
+          data2.forEach(p => { p.user_liked = liked.has(p.id); p.user_bookmarked = bk.has(p.id); p.user_reposted = rp.has(p.id); });
+        }
         append ? setPosts(prev => [...prev, ...data2]) : setPosts(data2);
         setHasMore(data2.length === PAGE_SIZE); hasMoreRef.current = data2.length === PAGE_SIZE;
         setLoading(false); setLoadingMore(false); loadingMoreRef.current = false;
