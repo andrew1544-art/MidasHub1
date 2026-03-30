@@ -170,7 +170,7 @@ export const useStore = create((set, get) => ({
     if (!supabase) { set({ loading: false }); return; }
 
     // Fast timeout - show UI quickly
-    const safetyTimeout = setTimeout(() => { if (get().loading) set({ loading: false }); }, 800);
+    const safetyTimeout = setTimeout(() => { if (get().loading) set({ loading: false }); }, 1200);
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
