@@ -29,8 +29,19 @@ export default function InstallPrompt() {
   const handleInstall = async () => {
     if (deferredPrompt) {
       deferredPrompt.prompt();
-      await deferredPrompt.userChoice;
+      const { outcome } = await deferredPrompt.userChoice;
       setDeferredPrompt(null);
+      if (outcome === 'accepted') {
+        // Mark as installed in profile
+        try {
+          const { createClient } = await import('@/lib/supabase-browser');
+          const sb = createClient();
+          const { data: { session } } = await sb.auth.getSession();
+          if (session?.user) {
+            await sb.from('profiles').update({ has_installed_pwa: true }).eq('id', session.user.id);
+          }
+        } catch(e) {}
+      }
     }
     setShow(false);
   };

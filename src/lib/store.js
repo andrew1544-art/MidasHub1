@@ -252,7 +252,7 @@ export const useStore = create((set, get) => ({
     }
   },
 
-  signup: async ({ email, password, username, displayName, avatarEmoji, dateOfBirth }) => {
+  signup: async ({ email, password, username, displayName, avatarEmoji, dateOfBirth, referredBy }) => {
     const supabase = getSupabase();
     if (!supabase) return { error: { message: 'App is loading...' } };
     try {
@@ -261,7 +261,9 @@ export const useStore = create((set, get) => ({
       if (age < 15) return { error: { message: 'You must be at least 15 years old.' } };
       const { data: existing } = await supabase.from('profiles').select('id').eq('username', username.toLowerCase()).maybeSingle();
       if (existing) return { error: { message: 'Username "' + username + '" is taken.' } };
-      const { data, error } = await supabase.auth.signUp({ email, password, options: { data: { username: username.toLowerCase(), display_name: displayName, avatar_emoji: avatarEmoji || '😎', date_of_birth: dateOfBirth, email: email }, emailRedirectTo: `${window.location.origin}/auth/callback` } });
+      const metadata = { username: username.toLowerCase(), display_name: displayName, avatar_emoji: avatarEmoji || '😎', date_of_birth: dateOfBirth, email: email };
+      if (referredBy) metadata.referred_by = referredBy.toUpperCase();
+      const { data, error } = await supabase.auth.signUp({ email, password, options: { data: metadata, emailRedirectTo: `${window.location.origin}/auth/callback` } });
       if (error) return { error: { message: friendlyError(error.message) } };
       if (data?.user?.identities?.length === 0) return { error: { message: 'Email already registered.' } };
       return { data, needsVerification: true };

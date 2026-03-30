@@ -15,6 +15,16 @@ export default function AuthModal() {
   const [showPass, setShowPass] = useState(false);
   const [form, setForm] = useState({ email: '', password: '', username: '', displayName: '', dateOfBirth: '', newPassword: '', confirmPassword: '' });
   const [step, setStep] = useState(1);
+  const [referralCode, setReferralCode] = useState('');
+
+  // Capture referral code from URL
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const ref = params.get('ref') || params.get('referral') || localStorage.getItem('midashub-ref') || '';
+      if (ref) { setReferralCode(ref.toUpperCase()); localStorage.setItem('midashub-ref', ref.toUpperCase()); }
+    }
+  }, [showAuth]);
 
   useEffect(() => { setMode(authMode); setStep(1); setError(''); setSuccess(''); }, [authMode, showAuth]);
 
@@ -40,10 +50,10 @@ export default function AuthModal() {
     if (!/^[a-zA-Z0-9_]+$/.test(form.username)) { setError('Username: only letters, numbers, underscores'); return; }
     if (!form.dateOfBirth) { setError('Date of birth required (15+)'); return; }
     setLoading(true);
-    const result = await signup({ ...form, avatarEmoji: selectedAvatar });
+    const result = await signup({ ...form, avatarEmoji: selectedAvatar, referredBy: referralCode });
     setLoading(false);
     if (result.error) setError(result.error.message);
-    else if (result.needsVerification) setSuccess('verify');
+    else if (result.needsVerification) { setSuccess('verify'); localStorage.removeItem('midashub-ref'); }
   };
 
   const handleLogin = async () => {
@@ -186,6 +196,7 @@ export default function AuthModal() {
                   <input type="text" placeholder="Display Name" value={form.displayName} onChange={e => setForm({...form, displayName: e.target.value})} className="input-field" maxLength={50} autoFocus />
                   <div className="relative"><span className="absolute left-4 top-1/2 -translate-y-1/2 text-white/30 text-sm">@</span><input type="text" placeholder="username" value={form.username} onChange={e => setForm({...form, username: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '')})} className="input-field pl-8" maxLength={30} /></div>
                   <div><label className="text-xs text-white/30 mb-1 block">Date of Birth (must be 15+)</label><input type="date" value={form.dateOfBirth} onChange={e => setForm({...form, dateOfBirth: e.target.value})} className="input-field" max={new Date(new Date().setFullYear(new Date().getFullYear() - 15)).toISOString().split('T')[0]} /></div>
+                  <div><label className="text-xs text-white/30 mb-1 block">Referral Code (optional)</label><input type="text" placeholder="Enter code if you have one" value={referralCode} onChange={e => setReferralCode(e.target.value.toUpperCase())} className="input-field" maxLength={10} style={{fontSize:'16px'}} /></div>
                 </div>
               )}
               {error && <div className="mt-3 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm">{error}</div>}

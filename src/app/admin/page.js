@@ -23,6 +23,7 @@ export default function AdminPage() {
   const [posts, setPosts] = useState([]);
   const [tradeRoles, setTradeRoles] = useState([]);
   const [feedbackList, setFeedbackList] = useState([]);
+  const [topReferrers, setTopReferrers] = useState([]);
   const [newRole, setNewRole] = useState({ name: '', icon: '👤', description: '' });
   const [loading, setLoading] = useState(true);
   const [editingEscrow, setEditingEscrow] = useState(null);
@@ -111,6 +112,9 @@ export default function AdminPage() {
       if (tab === 'roles') {
         try { const { data } = await supabase.from('trade_roles').select('*').order('display_order'); setTradeRoles(data || []); } catch(e) { setTradeRoles([]); }
       }
+      if (tab === 'referrals') {
+        try { const { data } = await supabase.from('profiles').select('id, display_name, username, avatar_emoji, referral_code, referral_count, qualified_referrals, is_verified, badges').order('qualified_referrals', { ascending: false }).limit(100); setTopReferrers(data || []); } catch(e) { setTopReferrers([]); }
+      }
       if (tab === 'feedback') {
         try {
           const { data: fb } = await supabase.from('feedback').select('*').order('created_at', { ascending: false }).limit(100);
@@ -197,6 +201,7 @@ export default function AdminPage() {
     { key: 'categories', label: '📂 Categories' },
     { key: 'roles', label: '🎭 Roles' },
     { key: 'feedback', label: '💡 Feedback' },
+    { key: 'referrals', label: '🔗 Referrals' },
     { key: 'diagnostics', label: '🔧 Test' },
     { key: 'posts', label: '📝 Posts' },
   ];
@@ -689,6 +694,41 @@ export default function AdminPage() {
                     </div>
                   );
                 })}
+              </div>
+            )}
+
+            {/* ===== REFERRALS ===== */}
+            {tab === 'referrals' && (
+              <div className="space-y-3">
+                <div className="text-xs text-white/30 mb-2">Referral leaderboard — qualified = referred user made a post</div>
+                <div className="grid grid-cols-3 gap-2 mb-3">
+                  <div className="glass-light rounded-xl p-3 text-center"><div className="text-xl font-black">{topReferrers.reduce((s, u) => s + (u.referral_count || 0), 0)}</div><div className="text-[10px] text-white/30">Total Signups</div></div>
+                  <div className="glass-light rounded-xl p-3 text-center"><div className="text-xl font-black text-green-400">{topReferrers.reduce((s, u) => s + (u.qualified_referrals || 0), 0)}</div><div className="text-[10px] text-white/30">Qualified</div></div>
+                  <div className="glass-light rounded-xl p-3 text-center"><div className="text-xl font-black text-[var(--accent)]">{topReferrers.filter(u => (u.referral_count || 0) > 0).length}</div><div className="text-[10px] text-white/30">Active Referrers</div></div>
+                </div>
+                {topReferrers.filter(u => (u.referral_count || 0) > 0 || (u.qualified_referrals || 0) > 0).length === 0 && (
+                  <div className="text-center py-12 text-white/20 text-sm">No referrals yet</div>
+                )}
+                {topReferrers.filter(u => (u.referral_count || 0) > 0 || (u.qualified_referrals || 0) > 0).map((u, i) => (
+                  <div key={u.id} className="glass-light rounded-xl p-3 flex items-center gap-3">
+                    <div className="text-center w-8 shrink-0"><div className="text-sm font-black text-white/20">#{i + 1}</div></div>
+                    <span className="text-xl">{u.avatar_emoji || '😎'}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-bold text-sm truncate">{u.display_name}</span>
+                        <InlineBadges profile={u} />
+                      </div>
+                      <div className="text-[10px] text-white/30">@{u.username} · Code: <span className="font-mono text-white/50">{u.referral_code}</span></div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <div className="text-sm font-bold">{u.referral_count || 0} <span className="text-[10px] text-white/30 font-normal">signups</span></div>
+                      <div className="text-xs text-green-400 font-bold">{u.qualified_referrals || 0} <span className="text-[10px] text-green-400/50 font-normal">qualified</span></div>
+                    </div>
+                    <div className="shrink-0 text-right text-[9px] text-white/20 w-16">
+                      {(u.qualified_referrals || 0) >= 50 ? '👑 VIP' : (u.qualified_referrals || 0) >= 30 ? '💎 OG' : (u.qualified_referrals || 0) >= 15 ? '⭐ Creator' : (u.qualified_referrals || 0) >= 5 ? '✔ Verified' : 'No badge'}
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
 

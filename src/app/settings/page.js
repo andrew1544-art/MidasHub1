@@ -106,6 +106,42 @@ export default function SettingsPage() {
           </div>
         </div>
 
+        {/* Referral Program */}
+        <div className="glass-light rounded-2xl p-5">
+          <h2 className="font-bold text-base mb-3">🔗 Refer & Earn Badges</h2>
+          <p className="text-xs text-white/30 mb-4">Share your link. When friends sign up AND make their first post, you earn badges!</p>
+          
+          <div className="p-3 rounded-xl bg-white/5 border border-white/10 mb-3">
+            <div className="text-[10px] text-white/30 mb-1 uppercase font-bold">Your Referral Link</div>
+            <div className="text-xs text-[var(--accent)] break-all font-mono">{`${typeof window !== 'undefined' ? window.location.origin : ''}/feed?ref=${profile?.referral_code || '...'}`}</div>
+          </div>
+
+          <div className="flex gap-2 mb-4">
+            <button onClick={() => {
+              const link = `${window.location.origin}/feed?ref=${profile?.referral_code}`;
+              navigator.clipboard.writeText(link);
+              showToast('Link copied! ✓');
+            }} className="btn-primary flex-1 py-2.5 text-xs">📋 Copy Link</button>
+            <button onClick={() => {
+              const link = `${window.location.origin}/feed?ref=${profile?.referral_code}`;
+              if (navigator.share) navigator.share({ title: 'Join MidasHub', text: 'Join me on MidasHub — the universal social hub!', url: link });
+              else { navigator.clipboard.writeText(link); showToast('Link copied! ✓'); }
+            }} className="btn-secondary flex-1 py-2.5 text-xs">📤 Share</button>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 mb-3">
+            <div className="p-3 rounded-xl bg-white/3 text-center"><div className="text-2xl font-black">{profile?.referral_count || 0}</div><div className="text-[10px] text-white/30">Signups</div></div>
+            <div className="p-3 rounded-xl bg-white/3 text-center"><div className="text-2xl font-black text-green-400">{profile?.qualified_referrals || 0}</div><div className="text-[10px] text-white/30">Qualified (posted)</div></div>
+          </div>
+
+          <div className="space-y-1.5 text-[10px]">
+            <div className="flex items-center gap-2"><span className={profile?.qualified_referrals >= 5 ? 'text-green-400' : 'text-white/20'}>✔</span><span className={profile?.qualified_referrals >= 5 ? 'text-blue-400 font-bold' : 'text-white/30'}>5 referrals → Blue Verified ✔ badge</span></div>
+            <div className="flex items-center gap-2"><span className={profile?.qualified_referrals >= 15 ? 'text-green-400' : 'text-white/20'}>⭐</span><span className={profile?.qualified_referrals >= 15 ? 'text-yellow-400 font-bold' : 'text-white/30'}>15 referrals → Creator ⭐ badge</span></div>
+            <div className="flex items-center gap-2"><span className={profile?.qualified_referrals >= 30 ? 'text-green-400' : 'text-white/20'}>💎</span><span className={profile?.qualified_referrals >= 30 ? 'text-purple-400 font-bold' : 'text-white/30'}>30 referrals → OG 💎 badge</span></div>
+            <div className="flex items-center gap-2"><span className={profile?.qualified_referrals >= 50 ? 'text-green-400' : 'text-white/20'}>👑</span><span className={profile?.qualified_referrals >= 50 ? 'text-yellow-400 font-bold' : 'text-white/30'}>50 referrals → VIP 👑 badge</span></div>
+          </div>
+        </div>
+
         {/* Feedback & Feature Requests */}
         <div className="glass-light rounded-2xl p-5">
           <h2 className="font-bold text-base mb-3">💡 Feedback & Requests</h2>
