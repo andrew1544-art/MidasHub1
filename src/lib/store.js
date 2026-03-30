@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { createClient } from '@/lib/supabase-browser';
+import { createClient, refreshSession } from '@/lib/supabase-browser';
 
 function getSupabase() {
   if (typeof window === 'undefined') return null;
@@ -228,20 +228,18 @@ export const useStore = create((set, get) => ({
         if (!currentUser) return;
 
         try {
-          // Refresh the auth session — this renews the token so queries work
+          // Force refresh auth token FIRST — prevents queries from failing
+          await refreshSession();
           const { data: { session } } = await supabase.auth.getSession();
           if (session?.user) {
-            // Token refreshed — update heartbeat
             supabase.from('profiles').update({ last_seen: new Date().toISOString() }).eq('id', session.user.id).then(() => {});
-            // Refresh notifications + chat
             if (away > 5000) {
               get().fetchNotifications?.();
               get().fetchUnreadChats?.();
             }
-            // Tell all pages to refetch their data
+            // Tell all pages to refetch AFTER auth is refreshed
             window.dispatchEvent(new Event('midashub:resumed'));
           } else {
-            // Session gone — user needs to log in again
             set({ user: null, profile: null });
           }
         } catch(e) {

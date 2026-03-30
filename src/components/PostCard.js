@@ -149,6 +149,7 @@ function CommentItem({ comment, postOwnerId, onDelete }) {
         <div className="bg-white/3 rounded-xl px-3 py-2">
           <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
             <Link href={`/profile/${comment.profiles?.username || 'unknown'}`} className="font-semibold text-xs hover:underline">{comment.profiles?.display_name || 'User'}</Link>
+            <InlineBadges profile={comment.profiles} />
             <RankBadge xp={comment.profiles?.xp || 0} size="xs" />
             <span className="text-[10px] text-white/20">{timeAgo(comment.created_at)}</span>
             {(isOwner || isPostOwner) && (
@@ -193,6 +194,9 @@ export default function PostCard({ post, onPostUpdated }) {
   const [comments, setComments] = useState([]);
   const [commentText, setCommentText] = useState('');
   const [commentsCount, setCommentsCount] = useState(post.comments_count || 0);
+  const [mentionQuery, setMentionQuery] = useState('');
+  const [mentionResults, setMentionResults] = useState([]);
+  const [showMentions, setShowMentions] = useState(false);
   const [showShareMenu, setShowShareMenu] = useState(false);
   const [showOptions, setShowOptions] = useState(false);
   const [loadingComments, setLoadingComments] = useState(false);
@@ -322,8 +326,44 @@ export default function PostCard({ post, onPostUpdated }) {
     } catch (e) { setCommentText(text); }
   };
 
-  const handleEditSaved = () => {
-    // Refresh the post data from parent
+  // Handle @mention autocomplete in comments
+  const handleCommentChange = async (e) => {
+    const val = e.target.value;
+    setCommentText(val);
+    // Check if user is typing @mention
+    const match = val.match(/@(\w{1,20})$/);
+    if (match && match[1].length >= 1) {
+      setMentionQuery(match[1]);
+      try {
+        const supabase = createClient();
+        const { data } = await supabase.from('profiles').select('username, display_name, avatar_emoji').ilike('username', `${match[1]}%`).limit(5);
+        setMentionResults(data || []);
+        setShowMentions((data || []).length > 0);
+      } catch(e) { setShowMentions(false); }
+    } else {
+      setShowMentions(false);
+    }
+  };
+
+  const insertMention = (username) => {
+    const before = commentText.replace(/@\w*$/, '');
+    setCommentText(before + '@' + username + ' ');
+    setShowMentions(false);
+  };
+
+  const handleEditSaved = async () => {
+    // Re-fetch the post to update local display state
+    try {
+      const supabase = createClient();
+      const { data } = await supabase.from('posts').select('*').eq('id', post.id).maybeSingle();
+      if (data) {
+        setDisplayContent(data.content);
+        setDisplayMedia(data.media_urls || []);
+        setDisplayTags(data.tags || []);
+        setDisplayPublic(data.is_public !== false);
+        setDisplayPlatform(data.source_platform);
+      }
+    } catch(e) {}
     onPostUpdated?.();
   };
 
@@ -458,10 +498,21 @@ export default function PostCard({ post, onPostUpdated }) {
           : comments.length === 0 ? <div className="text-center text-white/15 text-sm py-3">No comments yet — be the first!</div>
           : comments.map(c => <CommentItem key={c.id} comment={c} postOwnerId={post.user_id} onDelete={handleDeleteComment} />)}
           {user ? (
-            <div className="flex gap-2 mt-2 pt-2 border-t border-white/5">
+            <div className="flex gap-2 mt-2 pt-2 border-t border-white/5 relative">
               <span className="text-lg shrink-0 mt-1">{profile?.avatar_emoji || '😎'}</span>
-              <input value={commentText} onChange={e => setCommentText(e.target.value)} onKeyDown={e => e.key === 'Enter' && submitComment()}
-                placeholder="Write a comment..." className="input-field flex-1 py-2" style={{ fontSize: '16px' }} />
+              {showMentions && mentionResults.length > 0 && (
+                <div className="absolute bottom-full left-8 right-0 mb-1 glass rounded-xl p-1 shadow-xl z-30 max-h-36 overflow-y-auto">
+                  {mentionResults.map(m => (
+                    <button key={m.username} onClick={() => insertMention(m.username)}
+                      className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-white/5 text-left">
+                      <span className="text-sm">{m.avatar_emoji || '😎'}</span>
+                      <div><div className="text-xs font-semibold">{m.display_name}</div><div className="text-[10px] text-white/30">@{m.username}</div></div>
+                    </button>
+                  ))}
+                </div>
+              )}
+              <input value={commentText} onChange={handleCommentChange} onKeyDown={e => { if (e.key === 'Enter' && !showMentions) submitComment(); }}
+                placeholder="Comment... type @ to mention" className="input-field flex-1 py-2" style={{ fontSize: '16px' }} />
               <button onClick={submitComment} disabled={!commentText.trim()} className="btn-primary py-2 px-4 text-xs disabled:opacity-30">Post</button>
             </div>
           ) : (

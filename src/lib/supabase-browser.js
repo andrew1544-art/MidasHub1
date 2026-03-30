@@ -16,20 +16,25 @@ export function createClient() {
     );
   }
 
-  // Use supabase-js directly (not @supabase/ssr) to control auth lock
-  // This bypasses navigator.locks which freezes the app after background
   client = createSupabaseClient(url, key, {
     auth: {
       persistSession: true,
       autoRefreshToken: true,
       detectSessionInUrl: true,
       flowType: 'pkce',
-      // Replace navigator.locks with a no-op lock
-      // Prevents the 5-second freeze when app returns from background
-      lock: async (_name, _acquireTimeout, fn) => {
-        return await fn();
-      },
+      lock: async (_name, _acquireTimeout, fn) => await fn(),
     },
   });
   return client;
+}
+
+// Force refresh the auth session — call after app returns from background
+export async function refreshSession() {
+  if (!client) return;
+  try {
+    const { data: { session } } = await client.auth.getSession();
+    if (!session) {
+      await client.auth.refreshSession();
+    }
+  } catch(e) {}
 }
