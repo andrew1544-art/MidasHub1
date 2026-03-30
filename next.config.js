@@ -15,10 +15,10 @@ const nextConfig = {
       ],
     },
     {
-      // Don't cache HTML pages
-      source: '/((?!_next/static|_next/image|icon|manifest).*)',
+      // HTML pages — show cached version instantly, refresh in background
+      source: '/((?!_next/static|_next/image|icon|manifest|sw).*)',
       headers: [
-        { key: 'Cache-Control', value: 'no-cache, no-store, must-revalidate' },
+        { key: 'Cache-Control', value: 'public, max-age=0, s-maxage=60, stale-while-revalidate=300' },
       ],
     },
   ],

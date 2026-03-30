@@ -13,7 +13,7 @@ export default function AppShell({ children }) {
   useEffect(() => {
     initAuth();
     loadTheme();
-    const fallback = setTimeout(() => setForceShow(true), 1500);
+    const fallback = setTimeout(() => setForceShow(true), 800);
     return () => clearTimeout(fallback);
   }, []);
 

@@ -107,20 +107,17 @@ function friendlyError(msg) {
 async function loadProfile(supabase, userId) {
   try {
     const { data } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
-    if (data) {
-      // Sync email + DOB from auth if missing in profile
-      const updates = {};
-      if (!data.email) {
+    // Sync email in background — don't block UI
+    if (data && !data.email) {
+      setTimeout(async () => {
         try {
           const { data: { user } } = await supabase.auth.getUser();
+          const updates = {};
           if (user?.email) updates.email = user.email;
           if (!data.date_of_birth && user?.user_metadata?.date_of_birth) updates.date_of_birth = user.user_metadata.date_of_birth;
+          if (Object.keys(updates).length) await supabase.from('profiles').update(updates).eq('id', userId);
         } catch(e) {}
-      }
-      if (Object.keys(updates).length) {
-        await supabase.from('profiles').update(updates).eq('id', userId).then(() => {});
-        Object.assign(data, updates);
-      }
+      }, 2000);
     }
     return data;
   } catch (e) { return null; }
@@ -173,7 +170,7 @@ export const useStore = create((set, get) => ({
     if (!supabase) { set({ loading: false }); return; }
 
     // Fast timeout - show UI quickly
-    const safetyTimeout = setTimeout(() => { if (get().loading) set({ loading: false }); }, 1500);
+    const safetyTimeout = setTimeout(() => { if (get().loading) set({ loading: false }); }, 800);
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -184,10 +181,11 @@ export const useStore = create((set, get) => ({
         clearTimeout(safetyTimeout);
         // Background tasks - don't block UI
         requestNotifPermission();
-        registerPush(session.user.id);
-        trackSession(supabase, session.user.id);
         startHeartbeat(supabase, session.user.id);
-        awardDailyLogin(supabase, session.user.id, set);
+        // Delay heavy network tasks to not compete with feed loading
+        setTimeout(() => registerPush(session.user.id), 3000);
+        setTimeout(() => awardDailyLogin(supabase, session.user.id, set), 4000);
+        setTimeout(() => trackSession(supabase, session.user.id), 6000);
       } else {
         set({ loading: false });
         clearTimeout(safetyTimeout);
