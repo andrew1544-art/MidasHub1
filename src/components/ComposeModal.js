@@ -17,6 +17,8 @@ export default function ComposeModal() {
   const [showCrossPost, setShowCrossPost] = useState(false);
   const [quote, setQuote] = useState(null);
   const [isPublic, setIsPublic] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState('');
   const fileRef = useRef(null);
 
   // Pick up quote repost from PostCard
@@ -74,26 +76,57 @@ export default function ComposeModal() {
   };
 
   const handlePost = async () => {
-    if (!content.trim() || postingInBackground) return;
+    if (!content.trim() || uploading) return;
     setError('');
     
-    // Close modal immediately — post continues in background
-    const postData = {
-      content: content.trim(),
-      sourcePlatform,
-      sourceUrl: sourceUrl.trim(),
-      tags,
-      mediaFiles: [...mediaFiles], // copy array before clearing state
-      isPublic,
-      quote,
-    };
-    
-    // Reset form and close
+    let mediaUrls = [];
+    let hasVideo = false;
+
+    // Step 1: Upload media WHILE modal is open (user stays on page)
+    if (mediaFiles.length) {
+      setUploading(true);
+      setUploadStatus(`Uploading ${mediaFiles.length} file${mediaFiles.length > 1 ? 's' : ''}...`);
+      try {
+        const supabase = createClient();
+        const results = await Promise.all(mediaFiles.map(async (file) => {
+          try {
+            if (file.type.startsWith('video/')) hasVideo = true;
+            const ext = file.name.split('.').pop();
+            const path = `${user.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+            const { data, error } = await supabase.storage.from('media').upload(path, file, { contentType: file.type, cacheControl: '3600' });
+            if (data && !error) {
+              const { data: u } = supabase.storage.from('media').getPublicUrl(data.path);
+              return u.publicUrl;
+            }
+            return null;
+          } catch(e) { return null; }
+        }));
+        mediaUrls = results.filter(Boolean);
+        if (mediaUrls.length === 0 && mediaFiles.length > 0) {
+          setError('Upload failed. Try again.');
+          setUploading(false); setUploadStatus('');
+          return;
+        }
+      } catch(e) {
+        setError('Upload failed. Check your connection.');
+        setUploading(false); setUploadStatus('');
+        return;
+      }
+      setUploadStatus('Publishing...');
+    }
+
+    // Step 2: Close modal — DB insert is instant (no big files)
+    const postContent = content.trim();
+    const postQuote = quote;
     setContent(''); setSourcePlatform('midashub'); setSourceUrl(''); setTags('');
     setMediaFiles([]); setMediaPreviews([]); setQuote(null); setShowCompose(false);
-    
-    // Post in background (survives navigation)
-    backgroundPost(postData);
+    setUploading(false); setUploadStatus('');
+
+    // Step 3: Insert post to DB (fast, just text — survives backgrounding)
+    backgroundPost({
+      content: postContent, sourcePlatform, sourceUrl: sourceUrl.trim(),
+      tags, mediaUrls, hasVideo, isPublic, quote: postQuote,
+    });
   };
 
   return (
@@ -211,8 +244,8 @@ export default function ComposeModal() {
 
         {error && <div className="mb-3 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm">{error}</div>}
 
-        <button onClick={handlePost} disabled={!content.trim() || postingInBackground} className="btn-primary w-full py-3 flex items-center justify-center gap-2 disabled:opacity-40">
-          {postingInBackground ? <><span className="animate-spin">⏳</span> Posting...</> : quote ? '💬 Post with Quote' : 'Post to MidasHub 🚀'}
+        <button onClick={handlePost} disabled={!content.trim() || uploading || postingInBackground} className="btn-primary w-full py-3 flex items-center justify-center gap-2 disabled:opacity-40">
+          {uploading ? <><span className="animate-spin">⏳</span> {uploadStatus}</> : postingInBackground ? <><span className="animate-spin">⏳</span> Posting...</> : quote ? '💬 Post with Quote' : 'Post to MidasHub 🚀'}
         </button>
       </div>
     </div>
