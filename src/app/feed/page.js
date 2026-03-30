@@ -26,7 +26,11 @@ function FeedInner() {
   const [joiningRole, setJoiningRole] = useState(null);
   const [joinRoles, setJoinRoles] = useState([]);
   const [joining, setJoining] = useState(false);
+  const [hasDraft, setHasDraft] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  useEffect(() => {
+    try { setHasDraft(!!sessionStorage.getItem('mh-draft')); } catch(e) {}
+  }, []);
   const [pullDistance, setPullDistance] = useState(0);
   const touchStartY = useRef(0);
   const isPulling = useRef(false);
@@ -294,7 +298,7 @@ function FeedInner() {
               <span className="text-3xl">{profile?.avatar_emoji || '😎'}</span>
               <button onClick={() => setShowCompose(true)}
                 className="flex-1 text-left px-4 py-3 rounded-xl bg-white/5 text-white/30 text-sm hover:bg-white/8 transition cursor-text">
-                What&apos;s on your mind? Share anything...
+                {hasDraft ? <span className="text-[var(--accent)]">📝 Continue your draft...</span> : "What's on your mind? Share anything..."}
               </button>
               <button onClick={() => setShowCompose(true)} className="btn-primary py-2.5 px-5 text-xs shrink-0">✏️ Post</button>
             </div>

@@ -44,14 +44,13 @@ function ChatInner() {
   const endRef = useRef(null);
   const startedRef = useRef(false);
 
-  // Save/restore chat drafts per conversation
+  // Restore draft for active conversation
   useEffect(() => {
     if (activeConvo) {
-      try { sessionStorage.setItem('mh-chat-convo', activeConvo); } catch(e) {}
-      // Restore draft for this conversation
       try {
         const draft = sessionStorage.getItem('mh-chat-draft-' + activeConvo);
         if (draft) setText(draft);
+        else setText('');
       } catch(e) {}
     }
   }, [activeConvo]);
@@ -163,13 +162,6 @@ function ChatInner() {
       await loadConvos();
       const t = searchParams.get('user');
       if (t && !startedRef.current) { startedRef.current = true; await startChat(t); }
-      // Restore active conversation after reload
-      else if (!startedRef.current) {
-        try {
-          const savedConvo = sessionStorage.getItem('mh-chat-convo');
-          if (savedConvo) { await openConvo(savedConvo); startedRef.current = true; }
-        } catch(e) {}
-      }
       clearTimeout(safety);
     })();
     return () => clearTimeout(safety);
@@ -307,7 +299,7 @@ function ChatInner() {
                         <div className="flex items-center gap-1.5"><span className="font-semibold text-sm truncate">{c.otherUser?.display_name||'User'}</span><InlineBadges profile={c.otherUser} /></div>
                         <span className="text-[10px] text-white/20 shrink-0">{c.lastMessage ? timeAgo(c.lastMessage.created_at) : ''}</span>
                       </div>
-                      <span className="text-xs text-white/30 truncate block mt-0.5">{c.preview}</span>
+                      <span className="text-xs text-white/30 truncate block mt-0.5">{(() => { try { const d = sessionStorage.getItem('mh-chat-draft-' + c.id); if (d) return <span className="text-[var(--accent)]">📝 {d.slice(0,30)}{d.length>30?'...':''}</span>; } catch(e){} return c.preview; })()}</span>
                     </div>
                     {c.unread>0&&<span className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0" style={{background:'var(--accent)',color:'#000'}}>{c.unread}</span>}
                   </button>
@@ -322,7 +314,7 @@ function ChatInner() {
               ) : (<>
                 {/* Header */}
                 <div className="flex items-center gap-3 p-3 border-b border-white/5">
-                  <button onClick={() => { setActiveConvo(null); setOtherUser(null); setShowEmoji(false); msgsRef.current = []; setText(''); try { sessionStorage.removeItem('mh-chat-convo'); } catch(e) {} loadConvos(); }} className="md:hidden text-white/40 text-lg">←</button>
+                  <button onClick={() => { setActiveConvo(null); setOtherUser(null); setShowEmoji(false); msgsRef.current = []; setText(''); loadConvos(); }} className="md:hidden text-white/40 text-lg">←</button>
                   <Link href={`/profile/${otherUser?.username}`} className="flex items-center gap-3 hover:opacity-80 transition flex-1 min-w-0">
                     <span className="text-2xl">{otherUser?.avatar_emoji||'😎'}</span>
                     <div className="min-w-0">

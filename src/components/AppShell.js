@@ -7,7 +7,7 @@ import ComposeModal from '@/components/ComposeModal';
 import InstallPrompt from '@/components/InstallPrompt';
 
 export default function AppShell({ children }) {
-  const { initAuth, loading, theme, loadTheme, toast, postingInBackground, setShowCompose, user } = useStore();
+  const { initAuth, loading, theme, loadTheme, toast, postingInBackground } = useStore();
   const [forceShow, setForceShow] = useState(false);
 
   useEffect(() => {
@@ -16,18 +16,6 @@ export default function AppShell({ children }) {
     const fallback = setTimeout(() => setForceShow(true), 1200);
     return () => clearTimeout(fallback);
   }, []);
-
-  // Auto-open compose if user had a draft before reload
-  useEffect(() => {
-    if (user) {
-      try {
-        const draft = sessionStorage.getItem('mh-draft');
-        if (draft && draft.trim()) {
-          setShowCompose(true); // immediate, no delay
-        }
-      } catch(e) {}
-    }
-  }, [user]);
 
   useEffect(() => {
     if (theme) document.documentElement.setAttribute('data-theme', theme);
