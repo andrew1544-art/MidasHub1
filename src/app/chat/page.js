@@ -290,7 +290,7 @@ function ChatInner() {
               <div className="p-4 border-b border-white/5"><h2 className="font-bold text-lg">💬 Messages</h2></div>
               <div className="flex-1 overflow-y-auto overscroll-contain">
                 {loading ? <div className="p-4 space-y-3">{[1,2,3].map(i=><div key={i} className="flex gap-3 p-3"><div className="w-10 h-10 rounded-full skeleton"/><div className="flex-1 space-y-2"><div className="h-4 w-24 skeleton"/><div className="h-3 w-36 skeleton"/></div></div>)}</div>
-                : convos.length === 0 ? <div className="p-8 text-center text-white/20 text-sm"><div className="text-4xl mb-3">🗨️</div>No conversations<br/><Link href="/people" className="text-[var(--accent)] hover:underline mt-2 inline-block">Find people →</Link></div>
+                : convos.length === 0 ? <div className="p-8 text-center text-white/20 text-sm"><div className="text-4xl mb-3">🗨️</div>No conversations<br/><Link prefetch={false} href="/people" className="text-[var(--accent)] hover:underline mt-2 inline-block">Find people →</Link></div>
                 : convos.map(c => (
                   <button key={c.id} onClick={() => openConvo(c.id)} className={`w-full flex items-center gap-3 p-4 text-left transition hover:bg-white/5 ${activeConvo===c.id ? 'bg-white/5' : ''}`}>
                     <span className="text-3xl shrink-0">{c.otherUser?.avatar_emoji||'😎'}</span>
@@ -315,7 +315,7 @@ function ChatInner() {
                 {/* Header */}
                 <div className="flex items-center gap-3 p-3 border-b border-white/5">
                   <button onClick={() => { setActiveConvo(null); setOtherUser(null); setShowEmoji(false); msgsRef.current = []; setText(''); loadConvos(); }} className="md:hidden text-white/40 text-lg">←</button>
-                  <Link href={`/profile/${otherUser?.username}`} className="flex items-center gap-3 hover:opacity-80 transition flex-1 min-w-0">
+                  <Link prefetch={false} href={`/profile/${otherUser?.username}`} className="flex items-center gap-3 hover:opacity-80 transition flex-1 min-w-0">
                     <span className="text-2xl">{otherUser?.avatar_emoji||'😎'}</span>
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5">

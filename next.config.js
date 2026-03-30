@@ -19,12 +19,6 @@ const nextConfig = {
         { key: 'Cache-Control', value: 'no-cache, no-store, must-revalidate' },
       ],
     },
-    {
-      source: '/((?!_next/static|_next/image|icon|manifest|sw|recover).*)',
-      headers: [
-        { key: 'Cache-Control', value: 'no-cache, no-store, must-revalidate' },
-      ],
-    },
   ],
 };
 

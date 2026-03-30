@@ -40,88 +40,58 @@ export default function RootLayout({ children }) {
       <body className="antialiased">
         {children}
         <script dangerouslySetInnerHTML={{ __html: `
-          // SELF-HEALING: Detect broken cache/error state and auto-recover
+          // Self-healing: detect cached error page
           try {
-            // If referrer is chrome-error, we loaded from a cached error page
-            if (document.referrer.indexOf('chrome-error') > -1 || 
-                document.referrer.indexOf('chromewebdata') > -1) {
-              // Nuclear: clear everything and reload
+            if (document.referrer.indexOf('chrome-error') > -1) {
               if (navigator.serviceWorker) navigator.serviceWorker.getRegistrations().then(function(r){r.forEach(function(reg){reg.unregister()})});
-              if (window.caches) caches.keys().then(function(k){k.forEach(function(c){caches.delete(c)})});
-              sessionStorage.clear();
               setTimeout(function(){ location.replace('/feed'); }, 500);
             }
           } catch(e) {}
 
-          // Global error handler — if app crashes badly, offer recovery
+          // ChunkLoadError recovery
           window.addEventListener('error', function(e) {
-            if (e.message && (e.message.indexOf('ChunkLoadError') > -1 || e.message.indexOf('Loading chunk') > -1)) {
-              // Stale JS chunks — clear SW cache and reload
-              if (window.caches) caches.keys().then(function(k){k.forEach(function(c){caches.delete(c)})});
-              setTimeout(function(){ location.reload(); }, 200);
+            if (e.message && e.message.indexOf('ChunkLoadError') > -1) {
+              setTimeout(function(){ location.reload(); }, 500);
             }
           });
 
-          // Clear all caches on load
-          if ('caches' in window) { caches.keys().then(function(k) { k.forEach(function(c) { caches.delete(c); }); }); }
-          // Register/update SW — cache-bust to ensure latest version
+          // Register SW
           if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('/sw.js?v=10').then(function(r) {
               r.update();
-              if (r.waiting) { r.waiting.postMessage({ type: 'SKIP_WAITING' }); }
-              r.addEventListener('updatefound', function() {
-                var nw = r.installing;
-                if (nw) nw.addEventListener('statechange', function() {
-                  if (nw.state === 'activated') console.log('[SW] New version activated');
-                });
-              });
+              if (r.waiting) r.waiting.postMessage({ type: 'SKIP_WAITING' });
             }).catch(function(){});
-            // Listen for reload message from new SW
-            navigator.serviceWorker.addEventListener('message', function(e) {
-              if (e.data && e.data.type === 'RELOAD') window.location.reload();
-            });
           }
-          // Auto-reload after being away
+
+          // Soft refresh on return from background (NO hard reload)
+          // Dispatches event that pages listen to — they refetch data
           var _bg = 0;
           document.addEventListener('visibilitychange', function() {
             if (document.visibilityState === 'hidden') {
               _bg = Date.now();
+              // Save scroll position
               try {
                 sessionStorage.setItem('mh-scroll', String(window.scrollY));
                 sessionStorage.setItem('mh-path', window.location.pathname);
-                sessionStorage.setItem('mh-time', String(Date.now()));
-                // Check if compose modal is open
-                var composeOpen = document.querySelector('.modal-overlay') !== null;
-                if (composeOpen) sessionStorage.setItem('mh-compose-open', '1');
               } catch(e) {}
-            }
-            else if (_bg) {
-              var away = Date.now() - _bg;
-              // If compose was open, give more time (30s) before reloading
-              var wasComposing = false;
-              try { wasComposing = sessionStorage.getItem('mh-compose-open') === '1'; } catch(e) {}
-              var threshold = wasComposing ? 30000 : 15000;
-              if (away > threshold) { window.location.reload(); }
-              try { sessionStorage.removeItem('mh-compose-open'); } catch(e) {}
+            } else if (_bg && Date.now() - _bg > 3000) {
+              // Only dispatch refresh event — no page reload
+              window.dispatchEvent(new Event('midashub:resumed'));
+              _bg = 0;
             }
           });
-          // Restore scroll after reload
+
+          // Restore scroll
           try {
             var _sp = sessionStorage.getItem('mh-path');
             var _ss = sessionStorage.getItem('mh-scroll');
-            var _st = sessionStorage.getItem('mh-time');
-            if (_sp && _sp === window.location.pathname && _ss && _st) {
-              var _age = Date.now() - parseInt(_st);
-              if (_age < 300000) {
-                var _sy = parseInt(_ss);
-                setTimeout(function() { try { window.scroll(0, _sy); } catch(e) {} }, 400);
-                setTimeout(function() { try { window.scroll(0, _sy); } catch(e) {} }, 1000);
-                setTimeout(function() { try { window.scroll(0, _sy); } catch(e) {} }, 2000);
-              }
-              sessionStorage.removeItem('mh-scroll');
-              sessionStorage.removeItem('mh-path');
-              sessionStorage.removeItem('mh-time');
+            if (_sp && _sp === window.location.pathname && _ss) {
+              var _sy = parseInt(_ss);
+              setTimeout(function() { try { window.scroll(0, _sy); } catch(e) {} }, 500);
+              setTimeout(function() { try { window.scroll(0, _sy); } catch(e) {} }, 1500);
             }
+            sessionStorage.removeItem('mh-scroll');
+            sessionStorage.removeItem('mh-path');
           } catch(e) {}
         `}} />
       </body>

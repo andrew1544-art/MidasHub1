@@ -121,7 +121,7 @@ export default function LeaderboardPage() {
               const isSecond = idx === 1;
               const isThird = idx === 2;
               return (
-                <Link key={p.id} href={`/profile/${p.username}`}
+                <Link key={p.id} prefetch={false} href={`/profile/${p.username}`}
                   className={`glass-light rounded-2xl p-4 text-center hover-lift transition ${isSecond ? '' : 'mt-4'}`}>
                   <div className="text-2xl mb-1">{podiumMedals[idx]}</div>
                   <div className="text-4xl mb-2">{p.avatar_emoji || '😎'}</div>
@@ -158,7 +158,7 @@ export default function LeaderboardPage() {
               const rank = getRank(p.xp || 0);
               const isMe = user?.id === p.id;
               return (
-                <Link key={p.id} href={`/profile/${p.username}`}
+                <Link key={p.id} prefetch={false} href={`/profile/${p.username}`}
                   className={`flex items-center gap-3 px-4 py-3 rounded-xl transition hover:bg-white/5 ${isMe ? 'bg-[var(--accent)]/5 border border-[var(--accent)]/20' : 'glass-light'}`}>
                   <div className={`w-8 text-center font-black text-sm shrink-0 ${i < 3 ? '' : 'text-white/20'}`}
                     style={i < 3 ? { color: podiumColors[i] } : {}}>

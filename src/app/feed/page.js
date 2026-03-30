@@ -130,19 +130,24 @@ function FeedInner() {
   // Detect join trade link
   useEffect(() => {
     const code = searchParams.get('join_trade');
-    if (!code) return;
-    // Save code for after login if not logged in
+    // Also check sessionStorage for saved code after login
+    const savedCode = (() => { try { return sessionStorage.getItem('mh-join-trade'); } catch(e) { return null; } })();
+    const tradeCode = code || savedCode;
+    if (!tradeCode) return;
+    // Clear saved code
+    try { sessionStorage.removeItem('mh-join-trade'); } catch(e) {}
+    // Not logged in — save and prompt login
     if (!user) {
-      try { sessionStorage.setItem('mh-join-trade', code); } catch(e) {}
+      try { sessionStorage.setItem('mh-join-trade', tradeCode); } catch(e) {}
       setShowAuth(true, 'login');
+      if (code) window.history.replaceState({}, '', '/feed');
       return;
     }
+    // Logged in — load the trade
     (async () => {
       try {
-        const { ensureFreshAuth } = await import('@/lib/supabase-browser');
-        await ensureFreshAuth();
         const sb = createClient();
-        const { data: trade, error } = await sb.from('trades').select('*').eq('share_code', code).maybeSingle();
+        const { data: trade } = await sb.from('trades').select('*').eq('share_code', tradeCode).maybeSingle();
         if (trade) {
           setJoinTrade(trade);
           try {
@@ -155,23 +160,10 @@ function FeedInner() {
         } else {
           showToast?.('Trade not found or expired');
         }
-      } catch(e) {}
-      window.history.replaceState({}, '', '/feed');
+      } catch(e) { showToast?.('Could not load trade'); }
+      if (code) window.history.replaceState({}, '', '/feed');
     })();
   }, [searchParams, user]);
-
-  // Check for saved trade code after login
-  useEffect(() => {
-    if (!user) return;
-    try {
-      const saved = sessionStorage.getItem('mh-join-trade');
-      if (saved) {
-        sessionStorage.removeItem('mh-join-trade');
-        window.history.replaceState({}, '', `/feed?join_trade=${saved}`);
-        window.location.reload();
-      }
-    } catch(e) {}
-  }, [user]);
 
   const handleJoinTrade = async () => {
     if (!joinTrade || !joiningRole || !user) return;
@@ -264,26 +256,15 @@ function FeedInner() {
     setPullDistance(0);
   }, [fetchPosts]);
 
-  // Soft-refresh for short background returns (under reload threshold)
+  // Soft-refresh when returning from background
   useEffect(() => {
-    let bgTime = 0;
-    const handler = async () => {
-      if (document.visibilityState === 'hidden') { bgTime = Date.now(); return; }
-      if (!bgTime) return;
-      const away = Date.now() - bgTime;
-      bgTime = 0;
-      // Only soft-refresh if under the hard-reload threshold
-      // (hard reload handles longer absences via layout.js)
-      if (away > 2000 && away < 15000) {
-        try {
-          const { ensureFreshAuth } = await import('@/lib/supabase-browser');
-          await ensureFreshAuth();
-        } catch(e) {}
+    const handler = () => {
+      if (document.visibilityState === 'visible') {
         refreshFeed(false);
       }
     };
-    document.addEventListener('visibilitychange', handler);
-    return () => document.removeEventListener('visibilitychange', handler);
+    window.addEventListener('midashub:resumed', handler);
+    return () => window.removeEventListener('midashub:resumed', handler);
   }, [refreshFeed]);
 
   // Pull-to-refresh handlers

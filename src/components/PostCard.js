@@ -44,7 +44,7 @@ function MentionText({ text, className = '' }) {
   return (
     <span className={className}>
       {parts.map((p, i) => p.type === 'mention' ? (
-        <Link key={i} href={`/profile/${p.value.toLowerCase()}`} className="text-[var(--accent)] font-semibold hover:underline">@{p.value}</Link>
+        <Link key={i} prefetch={false} href={`/profile/${p.value.toLowerCase()}`} className="text-[var(--accent)] font-semibold hover:underline">@{p.value}</Link>
       ) : (
         <LinkifyContent key={i} text={p.value} />
       ))}
@@ -146,11 +146,11 @@ function CommentItem({ comment, postOwnerId, onDelete }) {
 
   return (
     <div className="flex gap-2">
-      <Link href={`/profile/${comment.profiles?.username || 'unknown'}`} className="text-lg shrink-0 mt-0.5">{comment.profiles?.avatar_emoji || '😎'}</Link>
+      <Link prefetch={false} href={`/profile/${comment.profiles?.username || 'unknown'}`} className="text-lg shrink-0 mt-0.5">{comment.profiles?.avatar_emoji || '😎'}</Link>
       <div className="flex-1 min-w-0">
         <div className="bg-white/3 rounded-xl px-3 py-2">
           <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
-            <Link href={`/profile/${comment.profiles?.username || 'unknown'}`} className="font-semibold text-xs hover:underline">{comment.profiles?.display_name || 'User'}</Link>
+            <Link prefetch={false} href={`/profile/${comment.profiles?.username || 'unknown'}`} className="font-semibold text-xs hover:underline">{comment.profiles?.display_name || 'User'}</Link>
             <InlineBadges profile={comment.profiles} />
             <RankBadge xp={comment.profiles?.xp || 0} size="xs" />
             <span className="text-[10px] text-white/20">{timeAgo(comment.created_at)}</span>
@@ -420,10 +420,10 @@ export default function PostCard({ post, onPostUpdated }) {
       {post.is_viral && <div className="flex items-center gap-1.5 text-[11px] font-bold text-orange-400 mb-3">🔥 Trending — {formatCount(post.views_count || post.likes_count * 10)} views</div>}
 
       <div className="flex items-center gap-3 mb-3">
-        <Link href={`/profile/${postUser.username || 'unknown'}`} className="text-3xl shrink-0">{postUser.avatar_emoji || '😎'}</Link>
+        <Link prefetch={false} href={`/profile/${postUser.username || 'unknown'}`} className="text-3xl shrink-0">{postUser.avatar_emoji || '😎'}</Link>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 flex-wrap">
-            <Link href={`/profile/${postUser.username || 'unknown'}`} className="font-bold text-sm hover:underline truncate">{postUser.display_name || 'User'}</Link>
+            <Link prefetch={false} href={`/profile/${postUser.username || 'unknown'}`} className="font-bold text-sm hover:underline truncate">{postUser.display_name || 'User'}</Link>
             <InlineBadges profile={postUser} />
             <RankBadge xp={postUser.xp || 0} size="xs" />
             <span className="text-xs text-white/25 truncate">@{postUser.username || 'user'}</span>

@@ -128,7 +128,7 @@ export default function Header() {
     <>
       <header className="sticky top-0 z-50 glass border-b border-white/5">
         <div className="max-w-6xl mx-auto px-3 sm:px-4 py-2.5 flex items-center gap-3">
-          <Link href="/feed" className="font-black text-lg sm:text-xl accent-text shrink-0">⚡ MidasHub</Link>
+          <Link prefetch={false} href="/feed" prefetch={false} className="font-black text-lg sm:text-xl accent-text shrink-0">⚡ MidasHub</Link>
 
           {/* Desktop search */}
           <div className="hidden sm:flex flex-1 max-w-md mx-4 relative">
@@ -160,7 +160,7 @@ export default function Header() {
           {/* Desktop nav */}
           <nav className="hidden md:flex items-center gap-1">
             {navItems.map((item) => (
-              <Link key={item.href} href={item.href}
+              <Link key={item.href} href={item.href} prefetch={false}
                 className={`relative px-3 py-2 rounded-lg text-sm font-medium transition ${pathname === item.href ? 'text-[var(--accent)] bg-white/5' : 'text-white/40 hover:text-white/70 hover:bg-white/3'}`}>
                 {item.icon} {item.label}
                 {item.badge > 0 && <span className="absolute -top-1 -right-1 w-4.5 h-4.5 min-w-[18px] px-1 rounded-full flex items-center justify-center text-[9px] font-bold" style={{ background: '#ef4444', color: '#fff' }}>{item.badge > 99 ? '99+' : item.badge}</span>}
@@ -207,10 +207,10 @@ export default function Header() {
                               <span className="text-lg shrink-0 mt-0.5">{icon}</span>
                               <div className="flex-1 min-w-0">
                                 <div className="flex gap-2 items-start">
-                                  <Link href={`/profile/${n.from_user?.username || ''}`} className="text-xl shrink-0" onClick={() => setShowNotif(false)}>{n.from_user?.avatar_emoji || '😎'}</Link>
+                                  <Link prefetch={false} href={`/profile//${n.from_user?.username || ''}`} className="text-xl shrink-0" onClick={() => setShowNotif(false)}>{n.from_user?.avatar_emoji || '😎'}</Link>
                                   <div className="flex-1 min-w-0">
                                     <p className="text-[13px] leading-snug">
-                                      <Link href={`/profile/${n.from_user?.username || ''}`} className="font-bold hover:underline" onClick={() => setShowNotif(false)}>{n.from_user?.display_name || 'Someone'}</Link>{' '}
+                                      <Link prefetch={false} href={`/profile//${n.from_user?.username || ''}`} className="font-bold hover:underline" onClick={() => setShowNotif(false)}>{n.from_user?.display_name || 'Someone'}</Link>{' '}
                                       <span className="text-white/60">{message}</span>
                                     </p>
                                     <div className="text-[10px] text-white/20 mt-0.5">{timeAgo(n.created_at)}</div>
@@ -259,7 +259,7 @@ export default function Header() {
                   </button>
                   {showMenu && (
                     <div className="absolute top-11 right-0 w-52 glass rounded-xl p-1.5 shadow-2xl">
-                      <Link href={`/profile/${profile?.username}`} className="flex items-center gap-2.5 p-2.5 rounded-lg hover:bg-white/5 transition" onClick={() => setShowMenu(false)}>
+                      <Link prefetch={false} href={`/profile//${profile?.username}`} className="flex items-center gap-2.5 p-2.5 rounded-lg hover:bg-white/5 transition" onClick={() => setShowMenu(false)}>
                         <span className="text-2xl">{profile?.avatar_emoji || '😎'}</span>
                         <div className="min-w-0">
                           <div className="flex items-center gap-1.5"><span className="font-semibold text-sm truncate">{profile?.display_name}</span></div>
@@ -270,9 +270,9 @@ export default function Header() {
                         </div>
                       </Link>
                       <div className="border-t border-white/5 my-1" />
-                      <Link href={`/profile/${profile?.username}`} className="block p-2 px-3 rounded-lg hover:bg-white/5 text-sm transition" onClick={() => setShowMenu(false)}>👤 Profile</Link>
-                      <Link href="/settings" className="block p-2 px-3 rounded-lg hover:bg-white/5 text-sm transition" onClick={() => setShowMenu(false)}>⚙️ Settings</Link>
-                      <Link href="/bookmarks" className="block p-2 px-3 rounded-lg hover:bg-white/5 text-sm transition" onClick={() => setShowMenu(false)}>🔖 Saved</Link>
+                      <Link prefetch={false} href={`/profile//${profile?.username}`} className="block p-2 px-3 rounded-lg hover:bg-white/5 text-sm transition" onClick={() => setShowMenu(false)}>👤 Profile</Link>
+                      <Link prefetch={false} href="/settings" prefetch={false} className="block p-2 px-3 rounded-lg hover:bg-white/5 text-sm transition" onClick={() => setShowMenu(false)}>⚙️ Settings</Link>
+                      <Link prefetch={false} href="/bookmarks" prefetch={false} className="block p-2 px-3 rounded-lg hover:bg-white/5 text-sm transition" onClick={() => setShowMenu(false)}>🔖 Saved</Link>
                       <div className="border-t border-white/5 my-1" />
                       <button onClick={() => { setShowMenu(false); logout(); }} className="w-full text-left p-2 px-3 rounded-lg hover:bg-red-500/10 text-red-400 text-sm transition">🚪 Log Out</button>
                     </div>
@@ -315,7 +315,7 @@ export default function Header() {
       <div className="md:hidden fixed bottom-0 left-0 right-0 glass border-t border-white/5 z-50 bottom-nav">
         <div className="flex justify-around py-1.5">
           {navItems.map((item) => (
-            <Link key={item.href} href={item.href}
+            <Link key={item.href} href={item.href} prefetch={false}
               className={`relative flex flex-col items-center gap-0.5 px-3 py-1 text-[10px] transition ${pathname === item.href ? 'text-[var(--accent)]' : 'text-white/35'}`}>
               <span className="text-lg">{item.icon}</span>
               <span>{item.label}</span>

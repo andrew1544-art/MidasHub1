@@ -92,7 +92,7 @@ export default function PeoplePage() {
 
   const PersonCard = ({ person, isFriend = false }) => (
     <div className="glass-light rounded-2xl p-5 hover-lift text-center transition-all">
-      <Link href={`/profile/${person.username}`} className="block group">
+      <Link prefetch={false} href={`/profile/${person.username}`} className="block group">
         <div className="text-5xl mb-3 group-hover:scale-110 transition-transform inline-block">{person.avatar_emoji || '😎'}</div>
         <div className="font-bold text-sm truncate">{person.display_name}</div>
         <div className="text-xs text-white/25 truncate mt-0.5">@{person.username}</div>
@@ -113,7 +113,7 @@ export default function PeoplePage() {
           ) : (
             <button onClick={() => sendRequest(person.id)} className="flex-1 py-2.5 rounded-xl btn-primary text-xs">+ Add Friend</button>
           )}
-          <Link href={`/chat?user=${person.id}`}
+          <Link prefetch={false} href={`/chat?user=${person.id}`}
             className="w-11 h-11 rounded-xl bg-white/5 border border-white/8 flex items-center justify-center text-lg hover:bg-white/10 transition">💬</Link>
         </div>
       )}
@@ -194,7 +194,7 @@ export default function PeoplePage() {
             <div className="space-y-3">
               {requests.map(req => (
                 <div key={req.id} className="glass-light rounded-xl p-4 flex items-center gap-4 animate-slide-up">
-                  <Link href={`/profile/${req.requester.username}`} className="text-3xl shrink-0">{req.requester.avatar_emoji || '😎'}</Link>
+                  <Link prefetch={false} href={`/profile/${req.requester.username}`} className="text-3xl shrink-0">{req.requester.avatar_emoji || '😎'}</Link>
                   <div className="flex-1 min-w-0">
                     <div className="font-bold text-sm truncate">{req.requester.display_name}</div>
                     <div className="text-xs text-white/25 truncate">@{req.requester.username} · {timeAgo(req.created_at)}</div>

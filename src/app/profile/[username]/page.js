@@ -115,7 +115,7 @@ export default function ProfilePage() {
     return <AppShell><div className="max-w-2xl mx-auto px-4 py-20 text-center">
       <div className="text-6xl mb-4">🤷</div><h2 className="text-2xl font-bold mb-2">User not found</h2>
       <p className="text-white/30 mb-6">@{username} doesn&apos;t exist</p>
-      <Link href="/people" className="btn-primary inline-block px-6 py-3">Browse People</Link>
+      <Link prefetch={false} href="/people" className="btn-primary inline-block px-6 py-3">Browse People</Link>
     </div></AppShell>;
   }
 
@@ -203,10 +203,10 @@ export default function ProfilePage() {
                   }`}>
                   {friendStatus === 'friends' ? '✓ Friends' : friendStatus === 'pending_sent' ? '⏳ Pending' : friendStatus === 'pending_received' ? 'Accept Request' : '+ Add Friend'}
                 </button>
-                <Link href={`/chat?user=${prof.id}`} className="btn-secondary px-6 py-2.5 text-sm">💬 Message</Link>
+                <Link prefetch={false} href={`/chat?user=${prof.id}`} className="btn-secondary px-6 py-2.5 text-sm">💬 Message</Link>
               </div>
             )}
-            {isOwn && <Link href="/settings" className="inline-block mt-6 btn-secondary px-6 py-2.5 text-sm">⚙️ Edit Profile</Link>}
+            {isOwn && <Link prefetch={false} href="/settings" className="inline-block mt-6 btn-secondary px-6 py-2.5 text-sm">⚙️ Edit Profile</Link>}
           </div>
         </div>
 
