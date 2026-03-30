@@ -135,10 +135,10 @@ export default function SettingsPage() {
           </div>
 
           <div className="space-y-1.5 text-[10px]">
-            <div className="flex items-center gap-2"><span className={profile?.qualified_referrals >= 5 ? 'text-green-400' : 'text-white/20'}>✔</span><span className={profile?.qualified_referrals >= 5 ? 'text-blue-400 font-bold' : 'text-white/30'}>5 referrals → Blue Verified ✔ badge</span></div>
-            <div className="flex items-center gap-2"><span className={profile?.qualified_referrals >= 15 ? 'text-green-400' : 'text-white/20'}>⭐</span><span className={profile?.qualified_referrals >= 15 ? 'text-yellow-400 font-bold' : 'text-white/30'}>15 referrals → Creator ⭐ badge</span></div>
-            <div className="flex items-center gap-2"><span className={profile?.qualified_referrals >= 30 ? 'text-green-400' : 'text-white/20'}>💎</span><span className={profile?.qualified_referrals >= 30 ? 'text-purple-400 font-bold' : 'text-white/30'}>30 referrals → OG 💎 badge</span></div>
-            <div className="flex items-center gap-2"><span className={profile?.qualified_referrals >= 50 ? 'text-green-400' : 'text-white/20'}>👑</span><span className={profile?.qualified_referrals >= 50 ? 'text-yellow-400 font-bold' : 'text-white/30'}>50 referrals → VIP 👑 badge</span></div>
+            <div className="flex items-center gap-2"><span className={profile?.qualified_referrals >= 5 ? 'text-green-400' : 'text-white/20'}>⭐</span><span className={profile?.qualified_referrals >= 5 ? 'text-yellow-400 font-bold' : 'text-white/30'}>5 referrals → Creator ⭐ badge</span></div>
+            <div className="flex items-center gap-2"><span className={profile?.qualified_referrals >= 15 ? 'text-green-400' : 'text-white/20'}>💎</span><span className={profile?.qualified_referrals >= 15 ? 'text-purple-400 font-bold' : 'text-white/30'}>15 referrals → OG 💎 badge</span></div>
+            <div className="flex items-center gap-2"><span className={profile?.qualified_referrals >= 30 ? 'text-green-400' : 'text-white/20'}>👑</span><span className={profile?.qualified_referrals >= 30 ? 'text-yellow-400 font-bold' : 'text-white/30'}>30 referrals → VIP 👑 badge</span></div>
+            <div className="flex items-center gap-2"><span className={profile?.qualified_referrals >= 50 ? 'text-green-400' : 'text-white/20'}>✔</span><span className={profile?.qualified_referrals >= 50 ? 'text-blue-400 font-bold' : 'text-white/30'}>50 referrals → Blue Verified ✔ (the ultimate!)</span></div>
           </div>
         </div>
 

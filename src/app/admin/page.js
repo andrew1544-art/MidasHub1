@@ -725,7 +725,7 @@ export default function AdminPage() {
                       <div className="text-xs text-green-400 font-bold">{u.qualified_referrals || 0} <span className="text-[10px] text-green-400/50 font-normal">qualified</span></div>
                     </div>
                     <div className="shrink-0 text-right text-[9px] text-white/20 w-16">
-                      {(u.qualified_referrals || 0) >= 50 ? '👑 VIP' : (u.qualified_referrals || 0) >= 30 ? '💎 OG' : (u.qualified_referrals || 0) >= 15 ? '⭐ Creator' : (u.qualified_referrals || 0) >= 5 ? '✔ Verified' : 'No badge'}
+                      {(u.qualified_referrals || 0) >= 50 ? '✔ Verified' : (u.qualified_referrals || 0) >= 30 ? '👑 VIP' : (u.qualified_referrals || 0) >= 15 ? '💎 OG' : (u.qualified_referrals || 0) >= 5 ? '⭐ Creator' : 'No badge'}
                     </div>
                   </div>
                 ))}

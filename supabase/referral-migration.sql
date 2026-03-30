@@ -64,29 +64,29 @@ BEGIN
       
       UPDATE public.profiles SET qualified_referrals = q_count WHERE id = referrer_id;
       
-      -- Auto-badge based on qualified referrals
-      -- 5+ = verified, 15+ = creator, 30+ = OG, 50+ = VIP
+      -- Auto-badge progression: creator→OG→VIP→Blue Verified
+      -- 5+ = creator, 15+ = OG, 30+ = VIP, 50+ = blue verified
       IF q_count >= 5 THEN
-        UPDATE public.profiles SET is_verified = true WHERE id = referrer_id AND is_verified = false;
-      END IF;
-      IF q_count >= 15 THEN
         UPDATE public.profiles SET badges = CASE 
           WHEN badges IS NULL OR badges::TEXT = '[]' THEN '["creator"]'::JSONB
           WHEN NOT badges ? 'creator' THEN badges || '"creator"'::JSONB
           ELSE badges END
         WHERE id = referrer_id;
       END IF;
-      IF q_count >= 30 THEN
+      IF q_count >= 15 THEN
         UPDATE public.profiles SET badges = CASE
           WHEN NOT badges ? 'og' THEN badges || '"og"'::JSONB
           ELSE badges END
         WHERE id = referrer_id;
       END IF;
-      IF q_count >= 50 THEN
+      IF q_count >= 30 THEN
         UPDATE public.profiles SET badges = CASE
           WHEN NOT badges ? 'vip' THEN badges || '"vip"'::JSONB
           ELSE badges END
         WHERE id = referrer_id;
+      END IF;
+      IF q_count >= 50 THEN
+        UPDATE public.profiles SET is_verified = true WHERE id = referrer_id AND is_verified = false;
       END IF;
     END IF;
   END IF;
