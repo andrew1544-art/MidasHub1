@@ -146,7 +146,19 @@ export default function ProfilePage() {
             {/* Referral stats */}
             {(prof.qualified_referrals > 0 || prof.referral_count > 0) && (
               <div className="flex justify-center gap-3 mt-2">
-                <span className="text-[10px] text-white/20">🔗 {prof.qualified_referrals || 0} referrals</span>
+                <span className="text-[10px] text-white/20">🔗 {prof.qualified_referrals || 0} qualified referrals</span>
+              </div>
+            )}
+            {/* Own profile — referral link */}
+            {isOwn && prof.referral_code && (
+              <div className="mt-3 max-w-xs mx-auto">
+                <button onClick={() => {
+                  const link = `${window.location.origin}/feed?ref=${prof.referral_code}`;
+                  if (navigator.share) navigator.share({ title: 'Join MidasHub', text: 'Join me on MidasHub!', url: link });
+                  else { navigator.clipboard.writeText(link); useStore.getState().showToast?.('Referral link copied! ✓'); }
+                }} className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[var(--accent)]/10 border border-[var(--accent)]/20 text-[var(--accent)] text-xs font-semibold hover:bg-[var(--accent)]/15 transition">
+                  🔗 Share Referral Link
+                </button>
               </div>
             )}
             {prof.bio && <p className="text-white/50 text-sm mt-3 max-w-sm mx-auto leading-relaxed">{prof.bio}</p>}

@@ -232,15 +232,28 @@ export default function PostCard({ post, onPostUpdated }) {
     const supabase = createClient();
     if (liked) {
       setLiked(false); setLikesCount(c => c - 1);
-      try { await supabase.from('likes').delete().match({ user_id: user.id, post_id: post.id }); } catch (e) {}
+      try {
+        const { error } = await supabase.from('likes').delete().match({ user_id: user.id, post_id: post.id });
+        if (error) { setLiked(true); setLikesCount(c => c + 1); }
+      } catch (e) { setLiked(true); setLikesCount(c => c + 1); }
     } else {
       setLiked(true); setLikesCount(c => c + 1);
       try {
         const { error } = await supabase.from('likes').insert({ user_id: user.id, post_id: post.id });
-        if (error) { console.warn('Like insert failed:', error.message); return; }
-        // Send notification — don't await, fire and forget
+        if (error) {
+          // Revert on failure
+          setLiked(false); setLikesCount(c => c - 1);
+          // If auth error, try refreshing and retry once
+          if (error.message?.includes('JWT') || error.code === 'PGRST301') {
+            const { refreshSession } = await import('@/lib/supabase-browser');
+            await refreshSession();
+            const { error: retryErr } = await supabase.from('likes').insert({ user_id: user.id, post_id: post.id });
+            if (!retryErr) { setLiked(true); setLikesCount(c => c + 1); }
+          }
+          return;
+        }
         sendNotification({ toUserId: post.user_id, fromUserId: user.id, type: 'like', referenceId: post.id, content: 'liked your post ❤️' });
-      } catch (e) { console.warn('Like error:', e); }
+      } catch (e) { setLiked(false); setLikesCount(c => c - 1); }
     }
   };
 
@@ -251,7 +264,13 @@ export default function PostCard({ post, onPostUpdated }) {
       const supabase = createClient();
       const { error } = await supabase.from('reposts').insert({ user_id: user.id, post_id: post.id });
       if (error && error.code === '23505') { showToast?.('Already reposted'); setReposted(true); setShowRepostMenu(false); return; }
-      if (error) { showToast?.('Repost failed'); return; }
+      if (error) {
+        // Auth stale — refresh and retry
+        const { refreshSession } = await import('@/lib/supabase-browser');
+        await refreshSession();
+        const { error: retryErr } = await supabase.from('reposts').insert({ user_id: user.id, post_id: post.id });
+        if (retryErr) { showToast?.('Repost failed'); return; }
+      }
       setReposted(true); setRepostsCount(c => c + 1); setShowRepostMenu(false);
       showToast?.('Reposted ✓');
       sendNotification({ toUserId: post.user_id, fromUserId: user.id, type: 'repost', referenceId: post.id, content: 'reposted your post 🔄' });
@@ -273,12 +292,19 @@ export default function PostCard({ post, onPostUpdated }) {
     try {
       if (bookmarked) {
         setBookmarked(false);
-        await supabase.from('bookmarks').delete().match({ user_id: user.id, post_id: post.id });
-        showToast?.('Removed from saved');
+        const { error } = await supabase.from('bookmarks').delete().match({ user_id: user.id, post_id: post.id });
+        if (error) setBookmarked(true);
+        else showToast?.('Removed from saved');
       } else {
         setBookmarked(true);
-        await supabase.from('bookmarks').insert({ user_id: user.id, post_id: post.id });
-        showToast?.('Saved ✓');
+        const { error } = await supabase.from('bookmarks').insert({ user_id: user.id, post_id: post.id });
+        if (error) {
+          setBookmarked(false);
+          const { refreshSession } = await import('@/lib/supabase-browser');
+          await refreshSession();
+          const { error: retryErr } = await supabase.from('bookmarks').insert({ user_id: user.id, post_id: post.id });
+          if (!retryErr) { setBookmarked(true); showToast?.('Saved ✓'); }
+        } else { showToast?.('Saved ✓'); }
       }
     } catch (e) {}
   };
@@ -302,14 +328,19 @@ export default function PostCard({ post, onPostUpdated }) {
     setCommentText('');
     try {
       const supabase = createClient();
-      const { data, error } = await supabase.from('comments').insert({ user_id: user.id, post_id: post.id, content: text }).select('*, profiles(*)').single();
-      if (error) { console.warn('Comment insert failed:', error.message); setCommentText(text); return; }
+      let { data, error } = await supabase.from('comments').insert({ user_id: user.id, post_id: post.id, content: text }).select('*, profiles(*)').single();
+      if (error) {
+        // Auth stale — refresh and retry
+        const { refreshSession } = await import('@/lib/supabase-browser');
+        await refreshSession();
+        const retry = await supabase.from('comments').insert({ user_id: user.id, post_id: post.id, content: text }).select('*, profiles(*)').single();
+        if (retry.error) { showToast?.('Comment failed'); setCommentText(text); return; }
+        data = retry.data;
+      }
       if (data) {
         setComments(prev => [...prev, data]);
         setCommentsCount(c => c + 1);
-        // Notify post owner
         sendNotification({ toUserId: post.user_id, fromUserId: user.id, type: 'comment', referenceId: post.id, content: `commented: "${text.slice(0, 60)}" 💬` });
-        // Notify @mentioned users
         const mentions = text.match(/@([a-zA-Z0-9_]+)/g);
         if (mentions) {
           const usernames = [...new Set(mentions.map(m => m.slice(1).toLowerCase()))];

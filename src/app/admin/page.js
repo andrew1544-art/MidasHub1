@@ -212,13 +212,15 @@ export default function AdminPage() {
         <div className="flex items-center gap-3 mb-6"><span className="text-3xl">⚙️</span><div><h1 className="text-2xl font-black">Admin Panel</h1><p className="text-white/30 text-xs">Manage MidasHub</p></div></div>
 
         {/* Tabs */}
-        <div className="flex gap-1.5 mb-6 overflow-x-auto no-scrollbar pb-1">
+        <div className="flex gap-1.5 mb-6 overflow-x-auto pb-2" style={{ WebkitOverflowScrolling: 'touch', scrollbarWidth: 'thin' }}>
+          <div className="flex gap-1.5 min-w-max">
           {tabs.map(t => (
             <button key={t.key} onClick={() => setTab(t.key)}
               className={`shrink-0 px-4 py-2 rounded-xl text-sm font-medium transition ${tab === t.key ? 'bg-[var(--accent)]/15 text-[var(--accent)] border border-[var(--accent)]/30' : 'bg-white/5 text-white/40'}`}>
               {t.label}
             </button>
           ))}
+          </div>
         </div>
 
         {loading ? <div className="text-center py-20 text-white/20">⏳ Loading...</div> : (
