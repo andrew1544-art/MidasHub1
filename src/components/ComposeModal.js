@@ -1,7 +1,7 @@
 'use client';
 import { useState, useRef, useEffect } from 'react';
 import { useStore } from '@/lib/store';
-import { createClient } from '@/lib/supabase-browser';
+import { createClient, ensureFreshAuth } from '@/lib/supabase-browser';
 import { PLATFORMS, PLATFORM_LIST } from '@/lib/constants';
 import { compressImage, checkVideoSize, formatSize } from '@/lib/media';
 
@@ -87,6 +87,7 @@ export default function ComposeModal() {
       setUploading(true);
       setUploadStatus(`Uploading ${mediaFiles.length} file${mediaFiles.length > 1 ? 's' : ''}...`);
       try {
+        await ensureFreshAuth();
         const supabase = createClient();
         const results = await Promise.all(mediaFiles.map(async (file) => {
           try {

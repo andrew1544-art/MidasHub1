@@ -1,7 +1,7 @@
 'use client';
 import { useState, useRef, useEffect } from 'react';
 import { useStore } from '@/lib/store';
-import { createClient } from '@/lib/supabase-browser';
+import { createClient, ensureFreshAuth } from '@/lib/supabase-browser';
 import { PLATFORMS, PLATFORM_LIST } from '@/lib/constants';
 import { compressImage, checkVideoSize, formatSize } from '@/lib/media';
 
@@ -67,9 +67,8 @@ export default function EditPostModal({ post, onClose, onSaved }) {
     if (!content.trim() || saving) return;
     setSaving(true); setError('');
     try {
+      await ensureFreshAuth();
       const supabase = createClient();
-
-      // Step 1: Upload new media WHILE modal is open
       let uploadedUrls = [];
       if (newMediaFiles.length) {
         setUploadStatus(`Uploading ${newMediaFiles.length} file${newMediaFiles.length > 1 ? 's' : ''}...`);

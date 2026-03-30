@@ -6,7 +6,7 @@ import AppShell from '@/components/AppShell';
 import { StartTradeButton, TradeCard } from '@/components/TradeBox';
 import EmojiPicker from '@/components/EmojiPicker';
 import { useStore } from '@/lib/store';
-import { createClient } from '@/lib/supabase-browser';
+import { createClient, ensureFreshAuth } from '@/lib/supabase-browser';
 import { timeAgo } from '@/lib/constants';
 import { playMessageSound } from '@/lib/sounds';
 import { compressImage, checkVideoSize } from '@/lib/media';
@@ -228,8 +228,13 @@ function ChatInner() {
     setMessages([...msgsRef.current]);
     setTimeout(() => endRef.current?.scrollIntoView({ behavior: 'smooth' }), 30);
     try {
-      await sb.from('messages').insert({ conversation_id: activeConvo, sender_id: user.id, content: msg });
-      // Push notification to other user (works even when app closed)
+      await ensureFreshAuth();
+      const { error } = await sb.from('messages').insert({ conversation_id: activeConvo, sender_id: user.id, content: msg });
+      if (error) {
+        // Retry once
+        await ensureFreshAuth();
+        await sb.from('messages').insert({ conversation_id: activeConvo, sender_id: user.id, content: msg });
+      }
       if (otherUser?.id) sendMessagePush(otherUser.id, profile?.display_name || 'Someone', msg);
     } catch(e) { showToast?.('Failed to send'); }
     setSending(false);

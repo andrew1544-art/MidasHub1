@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { createClient, refreshSession } from '@/lib/supabase-browser';
+import { createClient, refreshSession, ensureFreshAuth } from '@/lib/supabase-browser';
 
 function getSupabase() {
   if (typeof window === 'undefined') return null;
@@ -228,8 +228,8 @@ export const useStore = create((set, get) => ({
         if (!currentUser) return;
 
         try {
-          // Force refresh auth token FIRST — prevents queries from failing
-          await refreshSession();
+          // Ensure auth token is fresh before any operations
+          await ensureFreshAuth();
           const { data: { session } } = await supabase.auth.getSession();
           if (session?.user) {
             supabase.from('profiles').update({ last_seen: new Date().toISOString() }).eq('id', session.user.id).then(() => {});
@@ -342,6 +342,8 @@ export const useStore = create((set, get) => ({
     set({ postingInBackground: true });
 
     try {
+      // Ensure auth is fresh before writing
+      await ensureFreshAuth();
       let finalContent = content.trim();
       if (quote) {
         finalContent += `\n\n💬 Reposting @${quote.username}:\n"${quote.content.slice(0, 200)}${quote.content.length > 200 ? '...' : ''}"`;

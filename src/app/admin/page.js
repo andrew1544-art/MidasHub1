@@ -939,6 +939,33 @@ function DiagnosticsPanel({ supabase, user }) {
       setResults(prev => prev.map(r => r.name === 'Post-Refresh Write' ? { ...r, status: error ? '❌' : '✅', detail: error ? `Write after refresh FAILED: ${error.message}` : 'Write after refresh works — no stale auth bug' } : r));
     } catch(e) { setResults(prev => prev.map(r => r.name === 'Post-Refresh Write' ? { ...r, status: '❌', detail: e.message } : r)); }
 
+    // Test 14: Background simulation — wait 3s then try all operations
+    add('⏰', 'Background Sim (3s)', '⏳', 'Waiting 3 seconds to simulate background...');
+    await new Promise(r => setTimeout(r, 3000));
+    try {
+      const { ensureFreshAuth } = await import('@/lib/supabase-browser');
+      await ensureFreshAuth();
+      // Try multiple writes after the delay
+      const { data: bgPost, error: bgErr } = await supabase.from('posts').insert({ user_id: user.id, content: '[BG TEST]', source_platform: 'midashub', is_public: false }).select().single();
+      if (bgErr) {
+        setResults(prev => prev.map(r => r.name === 'Background Sim (3s)' ? { ...r, status: '❌', detail: `Write after 3s pause FAILED: ${bgErr.message}` } : r));
+      } else {
+        // Also test like
+        const { error: likeErr } = await supabase.from('likes').insert({ user_id: user.id, post_id: bgPost.id });
+        await supabase.from('likes').delete().match({ user_id: user.id, post_id: bgPost.id });
+        await supabase.from('posts').delete().eq('id', bgPost.id);
+        setResults(prev => prev.map(r => r.name === 'Background Sim (3s)' ? { ...r, status: likeErr ? '⚠️' : '✅', detail: likeErr ? `Post OK but like failed: ${likeErr.message}` : 'All writes work after 3s pause + ensureFreshAuth' } : r));
+      }
+    } catch(e) { setResults(prev => prev.map(r => r.name === 'Background Sim (3s)' ? { ...r, status: '❌', detail: e.message } : r)); }
+
+    // Test 15: Token keepalive check
+    add('💓', 'Token Keepalive', '⏳', 'Checking...');
+    try {
+      const { isTokenStale } = await import('@/lib/supabase-browser');
+      const stale = isTokenStale();
+      setResults(prev => prev.map(r => r.name === 'Token Keepalive' ? { ...r, status: stale ? '⚠️' : '✅', detail: stale ? 'Token may be stale — keepalive might not be running' : 'Token is fresh — keepalive active' } : r));
+    } catch(e) { setResults(prev => prev.map(r => r.name === 'Token Keepalive' ? { ...r, status: '⚠️', detail: e.message } : r)); }
+
     // Clean up test post
     if (testPostId) {
       await supabase.from('posts').delete().eq('id', testPostId);
