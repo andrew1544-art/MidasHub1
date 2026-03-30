@@ -59,11 +59,12 @@ export default function RootLayout({ children }) {
               if (e.data && e.data.type === 'RELOAD') window.location.reload();
             });
           }
-          // Auto-reload after 60s in background (mobile kills connections fast)
+          // Auto-reload after 5s in background
+          // Mobile browsers kill Supabase connections — only full reload fixes it
           var _bg = 0;
           document.addEventListener('visibilitychange', function() {
             if (document.visibilityState === 'hidden') { _bg = Date.now(); }
-            else if (_bg && Date.now() - _bg > 60000) { window.location.reload(); }
+            else if (_bg && Date.now() - _bg > 5000) { window.location.reload(); }
           });
         `}} />
       </body>

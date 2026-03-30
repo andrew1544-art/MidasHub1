@@ -218,25 +218,6 @@ function FeedInner() {
     setPullDistance(0);
   }, [fetchPosts]);
 
-  // Auto-refresh when app returns from background
-  useEffect(() => {
-    let bgTime = 0;
-    const onVisible = async () => {
-      if (document.visibilityState === 'hidden') { bgTime = Date.now(); return; }
-      if (document.visibilityState === 'visible') {
-        const away = bgTime ? Date.now() - bgTime : 0;
-        // Refresh auth first, then fetch
-        try {
-          const { ensureFreshAuth } = await import('@/lib/supabase-browser');
-          await ensureFreshAuth();
-        } catch(e) {}
-        refreshFeed(away > 10000); // show indicator if away > 10s
-      }
-    };
-    document.addEventListener('visibilitychange', onVisible);
-    return () => document.removeEventListener('visibilitychange', onVisible);
-  }, [refreshFeed]);
-
   // Pull-to-refresh handlers
   const onTouchStart = useCallback((e) => {
     if (window.scrollY <= 5) {
