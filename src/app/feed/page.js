@@ -12,7 +12,14 @@ function FeedInner() {
   const searchParams = useSearchParams();
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState('all');
+  const [filter, setFilter] = useState(() => {
+    try { return sessionStorage.getItem('mh-filter') || 'all'; } catch(e) { return 'all'; }
+  });
+
+  const changeFilter = (f) => {
+    setFilter(f);
+    try { sessionStorage.setItem('mh-filter', f); } catch(e) {}
+  };
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [joinTrade, setJoinTrade] = useState(null);
@@ -287,12 +294,12 @@ function FeedInner() {
 
         {/* Filters */}
         <div className="flex gap-1.5 mb-5 overflow-x-auto no-scrollbar pb-1">
-          <button onClick={() => setFilter('all')}
+          <button onClick={() => changeFilter('all')}
             className={`platform-pill shrink-0 px-4 py-2 rounded-xl text-sm ${filter === 'all' ? 'bg-white/10 text-white font-bold' : 'bg-white/4 text-white/35'}`}>
             🌐 All
           </button>
           {PLATFORM_LIST.map(([key, p]) => (
-            <button key={key} onClick={() => setFilter(key)} className="platform-pill shrink-0 px-4 py-2 rounded-xl text-sm"
+            <button key={key} onClick={() => changeFilter(key)} className="platform-pill shrink-0 px-4 py-2 rounded-xl text-sm"
               style={filter === key ? { background: `${p.color}20`, color: p.color, fontWeight: 700 } : { background: 'rgba(255,255,255,0.03)', color: 'rgba(255,255,255,0.3)' }}>
               {p.icon} {p.name}
             </button>

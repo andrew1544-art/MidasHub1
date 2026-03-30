@@ -60,12 +60,39 @@ export default function RootLayout({ children }) {
             });
           }
           // Auto-reload after 5s in background
-          // Mobile browsers kill Supabase connections — only full reload fixes it
+          // Save state before reload so user picks up where they left off
           var _bg = 0;
           document.addEventListener('visibilitychange', function() {
-            if (document.visibilityState === 'hidden') { _bg = Date.now(); }
+            if (document.visibilityState === 'hidden') {
+              _bg = Date.now();
+              // Save current state
+              try {
+                sessionStorage.setItem('mh-scroll', window.scrollY.toString());
+                sessionStorage.setItem('mh-path', window.location.pathname);
+                sessionStorage.setItem('mh-time', Date.now().toString());
+              } catch(e) {}
+            }
             else if (_bg && Date.now() - _bg > 5000) { window.location.reload(); }
           });
+          // Restore scroll position after reload
+          try {
+            var savedPath = sessionStorage.getItem('mh-path');
+            var savedScroll = sessionStorage.getItem('mh-scroll');
+            var savedTime = sessionStorage.getItem('mh-time');
+            if (savedPath && savedPath === window.location.pathname && savedScroll && savedTime) {
+              var age = Date.now() - parseInt(savedTime);
+              if (age < 300000) { // within 5 min
+                var scrollTo = parseInt(savedScroll);
+                // Wait for content to load then scroll
+                setTimeout(function() { window.scrollTo(0, scrollTo); }, 300);
+                setTimeout(function() { window.scrollTo(0, scrollTo); }, 800);
+                setTimeout(function() { window.scrollTo(0, scrollTo); }, 1500);
+              }
+              sessionStorage.removeItem('mh-scroll');
+              sessionStorage.removeItem('mh-path');
+              sessionStorage.removeItem('mh-time');
+            }
+          } catch(e) {}
         `}} />
       </body>
     </html>

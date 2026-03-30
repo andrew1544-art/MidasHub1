@@ -29,7 +29,21 @@ export default function ComposeModal() {
     } else if (!showCompose) {
       setQuote(null);
     }
+    // Restore draft on open
+    if (showCompose && !content) {
+      try {
+        const draft = sessionStorage.getItem('mh-draft');
+        if (draft) { setContent(draft); sessionStorage.removeItem('mh-draft'); }
+      } catch(e) {}
+    }
   }, [showCompose]);
+
+  // Save draft when composing
+  useEffect(() => {
+    if (showCompose && content) {
+      try { sessionStorage.setItem('mh-draft', content); } catch(e) {}
+    }
+  }, [content, showCompose]);
 
   // Lock body scroll when modal is open
   useEffect(() => {
@@ -121,6 +135,7 @@ export default function ComposeModal() {
     setContent(''); setSourcePlatform('midashub'); setSourceUrl(''); setTags('');
     setMediaFiles([]); setMediaPreviews([]); setQuote(null); setShowCompose(false);
     setUploading(false); setUploadStatus('');
+    try { sessionStorage.removeItem('mh-draft'); } catch(e) {}
 
     // Step 3: Insert post to DB (fast, just text — survives backgrounding)
     backgroundPost({
