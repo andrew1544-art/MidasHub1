@@ -8,13 +8,17 @@ import { createClient } from '@/lib/supabase-browser';
 import { PLATFORM_LIST } from '@/lib/constants';
 
 function FeedInner() {
-  const { user, profile, setShowAuth, setShowCompose } = useStore();
+  const { user, profile, setShowAuth, setShowCompose, showToast } = useStore();
   const searchParams = useSearchParams();
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [joinTrade, setJoinTrade] = useState(null);
+  const [joiningRole, setJoiningRole] = useState(null);
+  const [joinRoles, setJoinRoles] = useState([]);
+  const [joining, setJoining] = useState(false);
   const PAGE_SIZE = 20;
   const pageRef = useRef(0);
   const hasMoreRef = useRef(true);
@@ -83,6 +87,67 @@ function FeedInner() {
       window.history.replaceState({}, '', '/feed');
     }
   }, [searchParams, user]);
+
+  // Detect join trade link
+  useEffect(() => {
+    const code = searchParams.get('join_trade');
+    if (!code || !user) return;
+    (async () => {
+      try {
+        const sb = createClient();
+        const { data: trade } = await sb.from('trades').select('*').eq('share_code', code).maybeSingle();
+        if (trade) {
+          setJoinTrade(trade);
+          // Load available roles
+          try {
+            const { data: roles } = await sb.from('trade_roles').select('*').eq('is_active', true).order('display_order');
+            setJoinRoles(roles?.length ? roles : [
+              { id: 'seller', name: 'Seller', icon: '🏪', description: 'Selling' },
+              { id: 'buyer', name: 'Buyer', icon: '🛒', description: 'Buying' },
+            ]);
+          } catch(e) {}
+        } else {
+          showToast?.('Trade not found or expired');
+        }
+      } catch(e) {}
+      window.history.replaceState({}, '', '/feed');
+    })();
+  }, [searchParams, user]);
+
+  const handleJoinTrade = async () => {
+    if (!joinTrade || !joiningRole || !user) return;
+    // Must verify KYC first
+    if (profile?.kyc_status !== 'verified' && profile?.kyc_status !== 'pending') {
+      showToast?.('You must verify your identity first. Go to Chat → Start Trade to verify.');
+      return;
+    }
+    setJoining(true);
+    try {
+      const sb = createClient();
+      const selectedRole = joinRoles.find(r => r.id === joiningRole);
+      await sb.from('trade_participants').insert({
+        trade_id: joinTrade.id,
+        user_id: user.id,
+        role: selectedRole?.name || joiningRole,
+        role_id: selectedRole?.id !== 'seller' && selectedRole?.id !== 'buyer' ? selectedRole?.id : null,
+        kyc_verified: profile?.kyc_status === 'verified',
+      });
+      await sb.from('trade_messages').insert({
+        trade_id: joinTrade.id,
+        content: `👤 ${profile?.display_name || 'Someone'} joined the trade as ${selectedRole?.icon || ''}${selectedRole?.name || joiningRole}`,
+        is_system: true,
+      });
+      showToast?.('Joined trade ✓');
+      setJoinTrade(null); setJoiningRole(null);
+    } catch(e) {
+      if (e.message?.includes('duplicate') || e.message?.includes('unique')) {
+        showToast?.('You already joined this trade');
+      } else {
+        showToast?.('Failed to join trade');
+      }
+    }
+    setJoining(false);
+  };
 
   // Listen for new posts from compose
   useEffect(() => {
@@ -218,6 +283,46 @@ function FeedInner() {
           </div>
         )}
       </div>
+      {/* Join Trade Modal */}
+      {joinTrade && (
+        <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setJoinTrade(null)}>
+          <div className="modal-content max-w-md p-5 sm:p-6">
+            <div className="flex items-center justify-between mb-4"><h3 className="font-bold text-lg">🔒 Join Trade</h3><button onClick={() => setJoinTrade(null)} className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-white/40 text-sm">✕</button></div>
+
+            <div className="p-3 rounded-xl bg-white/5 border border-white/10 mb-4">
+              <div className="font-bold text-sm">{joinTrade.title}</div>
+              {joinTrade.description && <div className="text-xs text-white/40 mt-1">{joinTrade.description}</div>}
+              <div className="flex items-center gap-3 mt-2 text-xs text-white/30">
+                <span>💰 {joinTrade.currency} {parseFloat(joinTrade.amount).toFixed(2)}</span>
+                {joinTrade.delivery_estimate && <span>📦 {joinTrade.delivery_estimate}</span>}
+              </div>
+            </div>
+
+            {profile?.kyc_status !== 'verified' && profile?.kyc_status !== 'pending' && (
+              <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-xs text-red-300 mb-4">
+                ⚠️ You must verify your identity to join trades. Go to Chat → 🔒 Trade to start verification.
+              </div>
+            )}
+
+            <div className="text-sm font-semibold mb-2">Pick your role:</div>
+            <div className={`grid gap-2 mb-4 ${joinRoles.length <= 2 ? 'grid-cols-2' : 'grid-cols-2'}`}>
+              {joinRoles.map(r => (
+                <button key={r.id} onClick={() => setJoiningRole(r.id)}
+                  className={`p-3 rounded-xl border text-center transition ${joiningRole === r.id ? 'bg-[var(--accent)]/10 border-[var(--accent)]/30' : 'bg-white/3 border-white/10'}`}>
+                  <div className="text-xl mb-0.5">{r.icon}</div>
+                  <div className="text-xs font-bold">{r.name}</div>
+                </button>
+              ))}
+            </div>
+
+            <button onClick={handleJoinTrade}
+              disabled={!joiningRole || joining || (profile?.kyc_status !== 'verified' && profile?.kyc_status !== 'pending')}
+              className="btn-primary w-full py-3 text-sm disabled:opacity-30">
+              {joining ? '⏳ Joining...' : '🔒 Join This Trade'}
+            </button>
+          </div>
+        </div>
+      )}
     </AppShell>
   );
 }

@@ -191,40 +191,95 @@ export function StartTradeButton({ conversationId, otherUserId, onTradeCreated }
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState('instructions');
   const [role, setRole] = useState(null);
+  const [roles, setRoles] = useState([]);
   const [categories, setCategories] = useState([]);
   const [deliveryEst, setDeliveryEst] = useState('');
   const [customDelivery, setCustomDelivery] = useState('');
   const [form, setForm] = useState({ title: '', description: '', amount: '', currency: 'USD', paymentMethod: '', categoryId: '' });
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState('');
+  const [shareLink, setShareLink] = useState('');
 
   useEffect(() => {
     if (!open) return;
     const sy = window.scrollY; document.body.style.position = 'fixed'; document.body.style.top = `-${sy}px`; document.body.style.width = '100%';
-    // Decide starting step
     if (profile?.kyc_status === 'verified' || profile?.kyc_status === 'pending') setStep('instructions');
     else setStep('kyc');
-    // Load categories
-    (async () => { try { const sb = createClient(); const { data } = await sb.from('trade_categories').select('*').eq('is_active', true).order('name'); setCategories(data || []); } catch(e) {} })();
+    // Load categories + roles
+    (async () => {
+      try {
+        const sb = createClient();
+        const [catRes, roleRes] = await Promise.all([
+          sb.from('trade_categories').select('*').eq('is_active', true).order('name'),
+          sb.from('trade_roles').select('*').eq('is_active', true).order('display_order'),
+        ]);
+        setCategories(catRes.data || []);
+        const dbRoles = roleRes.data || [];
+        // Fallback if no roles in DB yet
+        setRoles(dbRoles.length ? dbRoles : [
+          { id: 'seller', name: 'Seller', icon: '🏪', description: 'I have an item or service to sell' },
+          { id: 'buyer', name: 'Buyer', icon: '🛒', description: 'I want to purchase' },
+        ]);
+      } catch(e) {
+        setRoles([
+          { id: 'seller', name: 'Seller', icon: '🏪', description: 'I have an item or service' },
+          { id: 'buyer', name: 'Buyer', icon: '🛒', description: 'I want to purchase' },
+        ]);
+      }
+    })();
     return () => { document.body.style.position = ''; document.body.style.top = ''; document.body.style.width = ''; window.scrollTo(0, sy); };
   }, [open, profile]);
+
+  const generateShareCode = () => {
+    return Math.random().toString(36).slice(2, 8).toUpperCase() + Date.now().toString(36).slice(-4).toUpperCase();
+  };
 
   const handleCreate = async () => {
     if (!form.title.trim() || !form.amount || parseFloat(form.amount) <= 0) { setError('Title and amount required'); return; }
     if (!role) { setError('Pick your role'); return; }
-    if (role === 'seller' && !deliveryEst) { setError('Set delivery estimate'); return; }
+    const selectedRole = roles.find(r => r.id === role);
+    const roleName = selectedRole?.name || role;
+    const needsDelivery = roleName.toLowerCase() === 'seller' || roleName.toLowerCase() === 'vendor';
+    if (needsDelivery && !deliveryEst) { setError('Set delivery estimate'); return; }
     setCreating(true); setError('');
     try {
       const sb = createClient();
       const delivery = deliveryEst === 'custom' ? customDelivery : (DELIVERY_OPTIONS.find(d => d.value === deliveryEst)?.label || deliveryEst);
-      const ins = { conversation_id: conversationId, seller_id: role === 'seller' ? user.id : otherUserId, buyer_id: role === 'buyer' ? user.id : otherUserId, title: form.title.trim(), description: form.description.trim(), amount: parseFloat(form.amount), currency: form.currency, payment_method: form.paymentMethod.trim(), delivery_estimate: delivery };
+      const shareCode = generateShareCode();
+      const ins = {
+        conversation_id: conversationId,
+        seller_id: user.id,
+        buyer_id: otherUserId,
+        title: form.title.trim(),
+        description: form.description.trim(),
+        amount: parseFloat(form.amount),
+        currency: form.currency,
+        payment_method: form.paymentMethod.trim(),
+        delivery_estimate: delivery || '',
+        share_code: shareCode,
+        require_kyc: true,
+      };
       if (form.categoryId) ins.category_id = form.categoryId;
       const { data, error: err } = await sb.from('trades').insert(ins).select().single();
       if (err) { setError(err.message); setCreating(false); return; }
-      await sb.from('trade_messages').insert({ trade_id: data.id, content: `🔒 New Trade Created\n━━━━━━━━━━━━━━━\n📦 ${form.title}\n💰 ${form.currency} ${parseFloat(form.amount).toFixed(2)} (+2% escrow fee)\n📦 Delivery: ${delivery}\n\nWaiting for ${role === 'seller' ? 'buyer' : 'seller'} to accept.`, is_system: true });
+
+      // Add creator as participant
+      try {
+        await sb.from('trade_participants').insert({
+          trade_id: data.id,
+          user_id: user.id,
+          role: roleName,
+          role_id: selectedRole?.id !== 'seller' && selectedRole?.id !== 'buyer' ? selectedRole?.id : null,
+          kyc_verified: profile?.kyc_status === 'verified',
+        });
+      } catch(e) {}
+
+      await sb.from('trade_messages').insert({ trade_id: data.id, content: `🔒 New Trade Created\n━━━━━━━━━━━━━━━\n📦 ${form.title}\n💰 ${form.currency} ${parseFloat(form.amount).toFixed(2)} (+2% escrow fee)\n📦 Delivery: ${delivery || 'TBD'}\n👤 ${profile?.display_name} joined as ${roleName}\n🔗 Share code: ${shareCode}\n\nOthers can join with the share link!`, is_system: true });
       sendNotification({ toUserId: otherUserId, fromUserId: user.id, type: 'system', content: `🔒 wants to start a trade with you: "${form.title}" for ${form.currency} ${parseFloat(form.amount).toFixed(2)}. Open your chat to review and accept!` });
       alertAdmins({ fromUserId: user.id, type: 'system', content: `🔒 New trade: "${form.title}" — ${form.currency} ${parseFloat(form.amount).toFixed(2)} (fee: ${form.currency} ${(parseFloat(form.amount) * 0.02).toFixed(2)})`, referenceId: data.id });
-      setOpen(false); setForm({ title: '', description: '', amount: '', currency: 'USD', paymentMethod: '', categoryId: '' }); setRole(null); setDeliveryEst('');
+      const link = `${window.location.origin}/feed?join_trade=${shareCode}`;
+      setShareLink(link);
+      setStep('share');
       showToast?.('Trade created ✓');
       onTradeCreated?.();
     } catch(e) { setError('Failed to create trade'); }
@@ -280,10 +335,16 @@ export function StartTradeButton({ conversationId, otherUserId, onTradeCreated }
         {/* STEP: Trade setup */}
         {step === 'trade' && (
           <div className="space-y-4">
-            <div className="text-sm font-semibold mb-1">What&apos;s your role?</div>
-            <div className="grid grid-cols-2 gap-3">
-              <button onClick={() => setRole('seller')} className={`p-4 rounded-xl border text-center transition ${role === 'seller' ? 'bg-green-500/10 border-green-500/30' : 'bg-white/3 border-white/10'}`}><div className="text-3xl mb-1">🏪</div><div className="text-sm font-bold">I&apos;m Selling</div><div className="text-[10px] text-white/30">I have an item/service</div></button>
-              <button onClick={() => setRole('buyer')} className={`p-4 rounded-xl border text-center transition ${role === 'buyer' ? 'bg-blue-500/10 border-blue-500/30' : 'bg-white/3 border-white/10'}`}><div className="text-3xl mb-1">🛒</div><div className="text-sm font-bold">I&apos;m Buying</div><div className="text-[10px] text-white/30">I want to purchase</div></button>
+            <div className="text-sm font-semibold mb-1">What&apos;s your role in this trade?</div>
+            <div className={`grid gap-2 ${roles.length <= 2 ? 'grid-cols-2' : roles.length <= 4 ? 'grid-cols-2' : 'grid-cols-3'}`}>
+              {roles.map(r => (
+                <button key={r.id} onClick={() => setRole(r.id)}
+                  className={`p-3 rounded-xl border text-center transition ${role === r.id ? 'bg-[var(--accent)]/10 border-[var(--accent)]/30' : 'bg-white/3 border-white/10'}`}>
+                  <div className="text-2xl mb-1">{r.icon}</div>
+                  <div className="text-xs font-bold">{r.name}</div>
+                  {r.description && <div className="text-[9px] text-white/30 mt-0.5 leading-tight">{r.description}</div>}
+                </button>
+              ))}
             </div>
 
             <div><div className="text-sm font-semibold mb-1.5">What are you trading? *</div><input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} placeholder="e.g., Logo Design, iPhone 15, Web Development..." className="input-field text-sm" style={{ fontSize: '16px' }} /></div>
@@ -305,7 +366,7 @@ export function StartTradeButton({ conversationId, otherUserId, onTradeCreated }
               </div>
             )}
 
-            {role === 'seller' && (
+            {(() => { const r = roles.find(x => x.id === role); return r && (r.name.toLowerCase() === 'seller' || r.name.toLowerCase() === 'vendor'); })() && (
               <div><div className="text-sm font-semibold mb-1.5">📦 Delivery Estimate *</div>
                 <div className="grid grid-cols-3 gap-1.5">{DELIVERY_OPTIONS.map(d => (<button key={d.value} onClick={() => setDeliveryEst(d.value)} className={`px-2 py-2 rounded-lg text-xs text-center ${deliveryEst === d.value ? 'bg-[var(--accent)]/15 text-[var(--accent)] border border-[var(--accent)]/30 font-bold' : 'bg-white/5 text-white/40 border border-white/5'}`}>{d.label}</button>))}</div>
                 {deliveryEst === 'custom' && <input value={customDelivery} onChange={e => setCustomDelivery(e.target.value)} placeholder="e.g., 5 business days" className="input-field text-sm mt-2" style={{ fontSize: '16px' }} />}
@@ -313,7 +374,50 @@ export function StartTradeButton({ conversationId, otherUserId, onTradeCreated }
             )}
 
             {error && <div className="text-xs text-red-400 bg-red-500/10 p-2.5 rounded-lg">{error}</div>}
-            <button onClick={handleCreate} disabled={creating || !form.amount || !form.title.trim() || !role || (role === 'seller' && !deliveryEst)} className="btn-primary w-full py-3 text-sm disabled:opacity-30">{creating ? '⏳ Creating...' : '🔒 Create Secure Trade'}</button>
+            <button onClick={handleCreate} disabled={creating || !form.amount || !form.title.trim() || !role || ((() => { const r = roles.find(x => x.id === role); return r && (r.name.toLowerCase() === 'seller' || r.name.toLowerCase() === 'vendor'); })() && !deliveryEst)} className="btn-primary w-full py-3 text-sm disabled:opacity-30">{creating ? '⏳ Creating...' : '🔒 Create Secure Trade'}</button>
+          </div>
+        )}
+
+        {/* STEP: Share link */}
+        {step === 'share' && (
+          <div className="space-y-4 text-center">
+            <div className="text-4xl mb-2">✅</div>
+            <h4 className="text-lg font-bold">Trade Created!</h4>
+            <p className="text-sm text-white/40">Share this link to invite others to join the trade. All participants must verify their identity.</p>
+
+            <div className="p-3 rounded-xl bg-white/5 border border-white/10">
+              <div className="text-[10px] text-white/30 mb-1 uppercase font-bold">Trade Invite Link</div>
+              <div className="text-xs text-[var(--accent)] break-all font-mono">{shareLink}</div>
+            </div>
+
+            <div className="flex gap-2">
+              <button onClick={() => {
+                navigator.clipboard.writeText(shareLink);
+                showToast?.('Link copied! ✓');
+              }} className="btn-primary flex-1 py-3 text-sm">📋 Copy Link</button>
+              <button onClick={() => {
+                if (navigator.share) {
+                  navigator.share({ title: `Join my trade on MidasHub`, text: `Join my trade: "${form.title}"`, url: shareLink });
+                } else {
+                  navigator.clipboard.writeText(shareLink);
+                  showToast?.('Link copied! ✓');
+                }
+              }} className="btn-secondary flex-1 py-3 text-sm">📤 Share</button>
+            </div>
+
+            <div className="p-3 rounded-lg bg-yellow-500/8 border border-yellow-500/15 text-[10px] text-yellow-300/70 text-left space-y-1">
+              <div className="font-bold">How multi-party trades work:</div>
+              <div>• Anyone with the link can join the trade</div>
+              <div>• All participants must verify their identity (KYC)</div>
+              <div>• Each person picks their role when joining</div>
+              <div>• Admin oversees all parties in the trade</div>
+            </div>
+
+            <button onClick={() => {
+              setOpen(false);
+              setForm({ title: '', description: '', amount: '', currency: 'USD', paymentMethod: '', categoryId: '' });
+              setRole(null); setDeliveryEst(''); setShareLink('');
+            }} className="text-sm text-white/40 hover:text-white/60">Close</button>
           </div>
         )}
       </div>
@@ -448,6 +552,19 @@ export function TradeCard({ trade, onUpdate }) {
 
           {/* Admin invite */}
           {isActive && <button onClick={inviteAdmin} className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg bg-blue-500/8 border border-blue-500/15 text-blue-300 text-xs hover:bg-blue-500/15 transition">🛡️ Request Admin Help</button>}
+
+          {/* Share trade link */}
+          {trade.share_code && isActive && (
+            <button onClick={() => {
+              const link = `${window.location.origin}/feed?join_trade=${trade.share_code}`;
+              if (navigator.share) {
+                navigator.share({ title: `Join trade on MidasHub`, text: `Join trade: "${trade.title}"`, url: link });
+              } else {
+                navigator.clipboard.writeText(link);
+                showToast?.('Trade link copied! ✓');
+              }
+            }} className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg bg-purple-500/8 border border-purple-500/15 text-purple-300 text-xs hover:bg-purple-500/15 transition">🔗 Invite Others to Trade</button>
+          )}
 
           {/* Review */}
           {canReview && !showReview && <button onClick={() => setShowReview(true)} className="w-full py-2.5 rounded-lg bg-[var(--accent)]/10 border border-[var(--accent)]/20 text-[var(--accent)] text-sm font-semibold">⭐ Leave a Review</button>}

@@ -20,6 +20,8 @@ export default function AdminPage() {
   const [categories, setCategories] = useState([]);
   const [kycQueue, setKycQueue] = useState([]);
   const [posts, setPosts] = useState([]);
+  const [tradeRoles, setTradeRoles] = useState([]);
+  const [newRole, setNewRole] = useState({ name: '', icon: '👤', description: '' });
   const [loading, setLoading] = useState(true);
   const [editingEscrow, setEditingEscrow] = useState(null);
   const [editingCat, setEditingCat] = useState(null);
@@ -101,6 +103,9 @@ export default function AdminPage() {
       if (tab === 'posts') {
         try { const { data } = await supabase.from('posts').select('*, profiles(*)').order('created_at', { ascending: false }).limit(100); setPosts(data || []); } catch(e) { setPosts([]); }
       }
+      if (tab === 'roles') {
+        try { const { data } = await supabase.from('trade_roles').select('*').order('display_order'); setTradeRoles(data || []); } catch(e) { setTradeRoles([]); }
+      }
     } catch (e) { console.error('Admin load error:', e); }
     setLoading(false);
   };
@@ -174,6 +179,7 @@ export default function AdminPage() {
     { key: 'trades', label: '🔒 Trades' },
     { key: 'escrow', label: '💰 Escrow' },
     { key: 'categories', label: '📂 Categories' },
+    { key: 'roles', label: '🎭 Roles' },
     { key: 'posts', label: '📝 Posts' },
   ];
 
@@ -489,6 +495,65 @@ export default function AdminPage() {
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+
+            {/* ===== TRADE ROLES ===== */}
+            {tab === 'roles' && (
+              <div className="space-y-4">
+                <div className="text-xs text-white/30 mb-2">Users pick a role when creating trades. Add custom roles below.</div>
+
+                {/* Add new role */}
+                <div className="glass-light rounded-xl p-4 space-y-3">
+                  <div className="text-sm font-bold">➕ Add New Role</div>
+                  <div className="flex gap-2">
+                    <input value={newRole.icon} onChange={e => setNewRole({ ...newRole, icon: e.target.value })} placeholder="🎭" className="input-field w-14 text-center text-lg" style={{ fontSize: '16px' }} />
+                    <input value={newRole.name} onChange={e => setNewRole({ ...newRole, name: e.target.value })} placeholder="Role name (e.g. Agent)" className="input-field flex-1 text-sm" style={{ fontSize: '16px' }} />
+                  </div>
+                  <input value={newRole.description} onChange={e => setNewRole({ ...newRole, description: e.target.value })} placeholder="Description (shown to users)" className="input-field text-sm" style={{ fontSize: '16px' }} />
+                  <button onClick={async () => {
+                    if (!newRole.name.trim()) return;
+                    const order = tradeRoles.length + 1;
+                    await supabase.from('trade_roles').insert({ ...newRole, display_order: order });
+                    setNewRole({ name: '', icon: '👤', description: '' });
+                    loadAll();
+                  }} disabled={!newRole.name.trim()} className="btn-primary py-2 px-4 text-sm disabled:opacity-30">Add Role</button>
+                </div>
+
+                {/* Existing roles */}
+                <div className="space-y-2">
+                  {tradeRoles.map(r => (
+                    <div key={r.id} className={`glass-light rounded-xl p-4 flex items-center gap-3 ${!r.is_active ? 'opacity-40' : ''}`}>
+                      <span className="text-2xl">{r.icon}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-bold text-sm">{r.name}</div>
+                        <div className="text-xs text-white/30">{r.description || 'No description'}</div>
+                      </div>
+                      <div className="flex gap-1.5 shrink-0">
+                        <button onClick={async () => {
+                          await supabase.from('trade_roles').update({ is_active: !r.is_active }).eq('id', r.id);
+                          loadAll();
+                        }} className={`text-[10px] px-2.5 py-1.5 rounded-lg ${r.is_active ? 'bg-green-500/15 text-green-400' : 'bg-white/5 text-white/30'}`}>
+                          {r.is_active ? '✅ Active' : '⏸️ Disabled'}
+                        </button>
+                        <button onClick={async () => {
+                          const newName = prompt('Edit role name:', r.name);
+                          if (!newName) return;
+                          const newIcon = prompt('Edit icon:', r.icon) || r.icon;
+                          const newDesc = prompt('Edit description:', r.description) || r.description;
+                          await supabase.from('trade_roles').update({ name: newName, icon: newIcon, description: newDesc }).eq('id', r.id);
+                          loadAll();
+                        }} className="text-[10px] px-2.5 py-1.5 rounded-lg bg-white/5 text-white/30">✏️ Edit</button>
+                        <button onClick={async () => {
+                          if (!confirm(`Delete "${r.name}" role?`)) return;
+                          await supabase.from('trade_roles').delete().eq('id', r.id);
+                          loadAll();
+                        }} className="text-[10px] px-2.5 py-1.5 rounded-lg bg-red-500/10 text-red-400">🗑️</button>
+                      </div>
+                    </div>
+                  ))}
+                  {tradeRoles.length === 0 && <div className="text-center py-8 text-white/20 text-sm">No roles yet. Add some above!</div>}
+                </div>
               </div>
             )}
 
