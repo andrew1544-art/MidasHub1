@@ -5,7 +5,7 @@ import AppShell from '@/components/AppShell';
 import { RankBadge } from '@/components/RankBadge';
 import { InlineBadges } from '@/components/Badge';
 import { useStore } from '@/lib/store';
-import { createClient } from '@/lib/supabase-browser';
+import { createClient, ensureFreshAuth } from '@/lib/supabase-browser';
 import { sendNotification } from '@/lib/notifications';
 import { timeAgo } from '@/lib/constants';
 
@@ -66,6 +66,7 @@ export default function PeoplePage() {
 
   const sendRequest = async (id) => {
     if (!user) return setShowAuth(true);
+    await ensureFreshAuth();
     const supabase = createClient();
     await supabase.from('friendships').insert({ requester_id: user.id, addressee_id: id });
     setPendingIds(prev => new Set([...prev, id]));
@@ -74,6 +75,7 @@ export default function PeoplePage() {
   };
 
   const acceptReq = async (shipId, requesterId) => {
+    await ensureFreshAuth();
     const supabase = createClient();
     await supabase.from('friendships').update({ status: 'accepted' }).eq('id', shipId);
     setRequests(prev => prev.filter(r => r.id !== shipId));
@@ -82,6 +84,7 @@ export default function PeoplePage() {
   };
 
   const declineReq = async (shipId) => {
+    await ensureFreshAuth();
     const supabase = createClient();
     await supabase.from('friendships').delete().eq('id', shipId);
     setRequests(prev => prev.filter(r => r.id !== shipId));

@@ -6,7 +6,7 @@ import AppShell from '@/components/AppShell';
 import PostCard from '@/components/PostCard';
 import { RankBadge, RankCard } from '@/components/RankBadge';
 import { useStore } from '@/lib/store';
-import { createClient } from '@/lib/supabase-browser';
+import { createClient, ensureFreshAuth } from '@/lib/supabase-browser';
 import { sendNotification } from '@/lib/notifications';
 import { PLATFORM_LIST, formatCount, timeAgo } from '@/lib/constants';
 import { InlineBadges, BadgePill, BADGE_TYPES } from '@/components/Badge';

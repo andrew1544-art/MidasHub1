@@ -2,7 +2,7 @@
 import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { useStore } from '@/lib/store';
-import { createClient } from '@/lib/supabase-browser';
+import { createClient, ensureFreshAuth } from '@/lib/supabase-browser';
 import { sendNotification } from '@/lib/notifications';
 import { PLATFORMS, formatCount, timeAgo } from '@/lib/constants';
 import { RankBadge } from '@/components/RankBadge';
@@ -124,10 +124,11 @@ function CommentItem({ comment, postOwnerId, onDelete }) {
     if (!editText.trim() || saving) return;
     setSaving(true);
     try {
+      await ensureFreshAuth();
       const supabase = createClient();
       const { error } = await supabase.from('comments').update({ content: editText.trim() }).eq('id', comment.id);
       if (!error) { setDisplayText(editText.trim()); setEditing(false); showToast?.('Comment updated ✓'); }
-      else showToast?.('Failed to update');
+      else { await ensureFreshAuth(); const { error: e2 } = await supabase.from('comments').update({ content: editText.trim() }).eq('id', comment.id); if (!e2) { setDisplayText(editText.trim()); setEditing(false); showToast?.('Comment updated ✓'); } else showToast?.('Failed to update'); }
     } catch (e) { showToast?.('Error saving'); }
     setSaving(false);
   };
@@ -135,6 +136,7 @@ function CommentItem({ comment, postOwnerId, onDelete }) {
   const handleDelete = async () => {
     if (!confirm('Delete this comment?')) return;
     try {
+      await ensureFreshAuth();
       const supabase = createClient();
       await supabase.from('comments').delete().eq('id', comment.id);
       onDelete?.(comment.id);
@@ -229,30 +231,25 @@ export default function PostCard({ post, onPostUpdated }) {
 
   const handleLike = async () => {
     if (!user) return useStore.getState().setShowAuth(true);
+    await ensureFreshAuth();
     const supabase = createClient();
     if (liked) {
       setLiked(false); setLikesCount(c => c - 1);
       try {
         const { error } = await supabase.from('likes').delete().match({ user_id: user.id, post_id: post.id });
-        if (error) { setLiked(true); setLikesCount(c => c + 1); }
+        if (error) { await ensureFreshAuth(); await supabase.from('likes').delete().match({ user_id: user.id, post_id: post.id }).catch(() => {}); }
       } catch (e) { setLiked(true); setLikesCount(c => c + 1); }
     } else {
       setLiked(true); setLikesCount(c => c + 1);
       try {
         const { error } = await supabase.from('likes').insert({ user_id: user.id, post_id: post.id });
         if (error) {
-          // Revert on failure
-          setLiked(false); setLikesCount(c => c - 1);
-          // If auth error, try refreshing and retry once
-          if (error.message?.includes('JWT') || error.code === 'PGRST301') {
-            const { refreshSession } = await import('@/lib/supabase-browser');
-            await refreshSession();
-            const { error: retryErr } = await supabase.from('likes').insert({ user_id: user.id, post_id: post.id });
-            if (!retryErr) { setLiked(true); setLikesCount(c => c + 1); }
-          }
-          return;
+          // Retry with fresh auth
+          await ensureFreshAuth();
+          const { error: retryErr } = await supabase.from('likes').insert({ user_id: user.id, post_id: post.id });
+          if (retryErr) { setLiked(false); setLikesCount(c => c - 1); return; }
         }
-        sendNotification({ toUserId: post.user_id, fromUserId: user.id, type: 'like', referenceId: post.id, content: 'liked your post ❤️' });
+        if (post.user_id !== user.id) sendNotification({ toUserId: post.user_id, fromUserId: user.id, type: 'like', referenceId: post.id, content: 'liked your post ❤️' });
       } catch (e) { setLiked(false); setLikesCount(c => c - 1); }
     }
   };
@@ -261,13 +258,12 @@ export default function PostCard({ post, onPostUpdated }) {
     if (!user) return useStore.getState().setShowAuth(true);
     if (reposted) { showToast?.('Already reposted'); setShowRepostMenu(false); return; }
     try {
+      await ensureFreshAuth();
       const supabase = createClient();
       const { error } = await supabase.from('reposts').insert({ user_id: user.id, post_id: post.id });
       if (error && error.code === '23505') { showToast?.('Already reposted'); setReposted(true); setShowRepostMenu(false); return; }
       if (error) {
-        // Auth stale — refresh and retry
-        const { refreshSession } = await import('@/lib/supabase-browser');
-        await refreshSession();
+        await ensureFreshAuth();
         const { error: retryErr } = await supabase.from('reposts').insert({ user_id: user.id, post_id: post.id });
         if (retryErr) { showToast?.('Repost failed'); return; }
       }
@@ -288,23 +284,23 @@ export default function PostCard({ post, onPostUpdated }) {
 
   const handleBookmark = async () => {
     if (!user) return useStore.getState().setShowAuth(true);
+    await ensureFreshAuth();
     const supabase = createClient();
     try {
       if (bookmarked) {
         setBookmarked(false);
         const { error } = await supabase.from('bookmarks').delete().match({ user_id: user.id, post_id: post.id });
-        if (error) setBookmarked(true);
-        else showToast?.('Removed from saved');
+        if (error) { await ensureFreshAuth(); await supabase.from('bookmarks').delete().match({ user_id: user.id, post_id: post.id }); }
+        showToast?.('Removed from saved');
       } else {
         setBookmarked(true);
         const { error } = await supabase.from('bookmarks').insert({ user_id: user.id, post_id: post.id });
         if (error) {
-          setBookmarked(false);
-          const { refreshSession } = await import('@/lib/supabase-browser');
-          await refreshSession();
+          await ensureFreshAuth();
           const { error: retryErr } = await supabase.from('bookmarks').insert({ user_id: user.id, post_id: post.id });
-          if (!retryErr) { setBookmarked(true); showToast?.('Saved ✓'); }
-        } else { showToast?.('Saved ✓'); }
+          if (retryErr) { setBookmarked(false); return; }
+        }
+        showToast?.('Saved ✓');
       }
     } catch (e) {}
   };
@@ -327,12 +323,11 @@ export default function PostCard({ post, onPostUpdated }) {
     const text = commentText.trim();
     setCommentText('');
     try {
+      await ensureFreshAuth();
       const supabase = createClient();
       let { data, error } = await supabase.from('comments').insert({ user_id: user.id, post_id: post.id, content: text }).select('*, profiles(*)').single();
       if (error) {
-        // Auth stale — refresh and retry
-        const { refreshSession } = await import('@/lib/supabase-browser');
-        await refreshSession();
+        await ensureFreshAuth();
         const retry = await supabase.from('comments').insert({ user_id: user.id, post_id: post.id, content: text }).select('*, profiles(*)').single();
         if (retry.error) { showToast?.('Comment failed'); setCommentText(text); return; }
         data = retry.data;
@@ -401,6 +396,7 @@ export default function PostCard({ post, onPostUpdated }) {
   const deletePost = async () => {
     if (!confirm('Delete this post permanently?')) return;
     try {
+      await ensureFreshAuth();
       const supabase = createClient();
       await supabase.from('posts').delete().eq('id', post.id);
       showToast?.('Post deleted'); onPostUpdated?.();
