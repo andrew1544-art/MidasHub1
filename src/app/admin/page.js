@@ -28,6 +28,8 @@ export default function AdminPage() {
   const [newEscrow, setNewEscrow] = useState({ method_name: '', method_icon: '💰', details: '', currency: 'USD', is_active: true, display_order: 0 });
   const [newCat, setNewCat] = useState({ name: '', icon: '📦', description: '', requires_kyc: true, is_active: true });
   const [viewingTrade, setViewingTrade] = useState(null);
+  const [expandedUser, setExpandedUser] = useState(null);
+  const [userSessions, setUserSessions] = useState([]);
   const supabase = createClient();
 
   // Admin check — fetch fresh from DB, don't rely on cached profile
@@ -269,79 +271,126 @@ export default function AdminPage() {
                 <div className="text-xs text-white/30 mb-2">{users.length} users</div>
                 {users.map(u => {
                   const userBadges = (() => { try { const b = typeof u.badges === 'string' ? JSON.parse(u.badges) : u.badges; return Array.isArray(b) ? b : []; } catch(e) { return []; } })();
+                  const isExpanded = expandedUser === u.id;
                   return (
-                  <div key={u.id} className={`glass-light rounded-xl p-4 ${u.is_suspended ? 'border border-red-500/30 opacity-60' : ''}`}>
-                    <div className="flex items-center gap-3">
+                  <div key={u.id} className={`glass-light rounded-xl overflow-hidden ${u.is_suspended ? 'border border-red-500/30' : ''}`}>
+                    {/* User header — click to expand */}
+                    <button onClick={async () => {
+                      if (isExpanded) { setExpandedUser(null); return; }
+                      setExpandedUser(u.id);
+                      try { const { data } = await supabase.from('user_sessions').select('*').eq('user_id', u.id).order('logged_in_at', { ascending: false }).limit(10); setUserSessions(data || []); } catch(e) { setUserSessions([]); }
+                    }} className="w-full p-4 flex items-center gap-3 text-left hover:bg-white/3 transition">
                       <span className="text-2xl">{u.avatar_emoji || '😎'}</span>
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <span className="font-bold text-sm truncate">{u.display_name}</span>
-                          <InlineBadges profile={u} />
-                          <span className="text-xs text-white/25">@{u.username}</span>
-                        </div>
+                        <div className="flex items-center gap-1.5"><span className="font-bold text-sm truncate">{u.display_name}</span><InlineBadges profile={u} /><span className="text-xs text-white/25">@{u.username}</span></div>
                         <div className="flex items-center gap-2 mt-0.5 text-[10px] text-white/30 flex-wrap">
                           <span>{u.xp || 0} XP</span><span>·</span>
-                          <span>KYC: {u.kyc_status || 'none'}</span><span>·</span>
+                          <span>KYC: <span className={u.kyc_status==='verified'?'text-green-400':u.kyc_status==='pending'?'text-yellow-400':u.kyc_status==='rejected'?'text-red-400':''}>{u.kyc_status || 'none'}</span></span><span>·</span>
                           <span>{u.trade_count || 0} trades</span><span>·</span>
-                          <span>{timeAgo(u.created_at)}</span>
+                          <span>{u.login_count || 0} logins</span>
+                          {u.last_country && <><span>·</span><span>📍{u.last_city ? `${u.last_city}, ` : ''}{u.last_country}</span></>}
                           {u.is_suspended && <span className="text-red-400 font-bold">· ⛔ SUSPENDED</span>}
                         </div>
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
                         {u.is_admin && <span className="text-[9px] px-2 py-1 rounded-full bg-purple-500/15 text-purple-400 font-bold">ADMIN</span>}
+                        <span className="text-white/20 text-xs">{isExpanded ? '▲' : '▼'}</span>
                       </div>
-                    </div>
+                    </button>
 
-                    {/* Action buttons */}
-                    <div className="flex flex-wrap gap-1.5 mt-3 pt-3 border-t border-white/5">
-                      {/* Verification badge (blue tick) */}
-                      <button onClick={async () => { await supabase.from('profiles').update({ is_verified: !u.is_verified }).eq('id', u.id); loadAll(); }}
-                        className={`text-[10px] px-2.5 py-1.5 rounded-lg ${u.is_verified ? 'bg-blue-500/15 text-blue-400' : 'bg-white/5 text-white/30'}`}>
-                        {u.is_verified ? '✔ Verified' : '✔ Give Verified'}
-                      </button>
+                    {/* Expanded details */}
+                    {isExpanded && (
+                      <div className="px-4 pb-4 space-y-3 border-t border-white/5">
+                        {/* Quick info */}
+                        <div className="grid grid-cols-2 gap-2 mt-3 text-[10px]">
+                          <div className="p-2 rounded-lg bg-white/3"><span className="text-white/30">Email</span><div className="text-xs truncate">{u.email || 'N/A'}</div></div>
+                          <div className="p-2 rounded-lg bg-white/3"><span className="text-white/30">Joined</span><div className="text-xs">{new Date(u.created_at).toLocaleDateString()}</div></div>
+                          <div className="p-2 rounded-lg bg-white/3"><span className="text-white/30">Last seen</span><div className="text-xs">{u.last_seen ? timeAgo(u.last_seen) : 'Never'}</div></div>
+                          <div className="p-2 rounded-lg bg-white/3"><span className="text-white/30">Last IP</span><div className="text-xs font-mono">{u.last_ip || 'Unknown'}</div></div>
+                          <div className="p-2 rounded-lg bg-white/3"><span className="text-white/30">Location</span><div className="text-xs">{u.last_city && u.last_country ? `${u.last_city}, ${u.last_country}` : u.last_country || 'Unknown'}</div></div>
+                          <div className="p-2 rounded-lg bg-white/3"><span className="text-white/30">Device</span><div className="text-xs">{u.last_device || 'Unknown'}</div></div>
+                          <div className="p-2 rounded-lg bg-white/3"><span className="text-white/30">Logins</span><div className="text-xs">{u.login_count || 0}</div></div>
+                          <div className="p-2 rounded-lg bg-white/3"><span className="text-white/30">DOB</span><div className="text-xs">{u.date_of_birth || 'N/A'}</div></div>
+                        </div>
 
-                      {/* Custom badges */}
-                      {Object.entries(BADGE_TYPES).filter(([k]) => k !== 'verified' && k !== 'trader').map(([key, badge]) => {
-                        const has = userBadges.includes(key);
-                        return (
-                          <button key={key} onClick={async () => {
-                            const newBadges = has ? userBadges.filter(b => b !== key) : [...userBadges, key];
-                            await supabase.from('profiles').update({ badges: JSON.stringify(newBadges) }).eq('id', u.id);
-                            loadAll();
-                          }} className={`text-[10px] px-2.5 py-1.5 rounded-lg ${has ? 'border' : 'bg-white/5 text-white/30'}`}
-                            style={has ? { background: badge.bg, color: badge.color, borderColor: badge.border } : {}}>
-                            {badge.icon} {has ? badge.label : `Give ${badge.label}`}
+                        {/* KYC Details — always visible if submitted */}
+                        {(u.kyc_full_name || u.kyc_status === 'verified' || u.kyc_status === 'pending' || u.kyc_status === 'rejected') && (
+                          <div className="p-3 rounded-xl bg-white/3 border border-white/5 space-y-2">
+                            <div className="flex items-center gap-2"><span className="text-sm font-bold">🛡️ KYC Details</span><span className={`text-[9px] px-2 py-0.5 rounded-full font-bold ${u.kyc_status==='verified'?'bg-green-500/15 text-green-400':u.kyc_status==='pending'?'bg-yellow-500/15 text-yellow-400':'bg-red-500/15 text-red-400'}`}>{u.kyc_status?.toUpperCase()}</span></div>
+                            <div className="grid grid-cols-2 gap-2 text-[10px]">
+                              <div><span className="text-white/30">Full Name</span><div className="text-xs font-semibold">{u.kyc_full_name || '—'}</div></div>
+                              <div><span className="text-white/30">Phone</span><div className="text-xs">{u.kyc_phone || '—'}</div></div>
+                              <div><span className="text-white/30">Country</span><div className="text-xs">{u.kyc_country || '—'}</div></div>
+                              <div><span className="text-white/30">ID Type</span><div className="text-xs">{u.kyc_id_type || '—'}</div></div>
+                              <div className="col-span-2"><span className="text-white/30">ID Number</span><div className="text-xs font-mono">{u.kyc_id_number || '—'}</div></div>
+                              {u.kyc_submitted_at && <div className="col-span-2"><span className="text-white/30">Submitted</span><div className="text-xs">{new Date(u.kyc_submitted_at).toLocaleString()}</div></div>}
+                              {u.kyc_admin_note && <div className="col-span-2"><span className="text-white/30">Admin Note</span><div className="text-xs text-yellow-400">{u.kyc_admin_note}</div></div>}
+                            </div>
+                            {/* ID photos */}
+                            <div className="flex gap-2 mt-2">
+                              {u.kyc_id_photo_url && <a href={u.kyc_id_photo_url} target="_blank" rel="noreferrer" className="block"><img src={u.kyc_id_photo_url} alt="ID" className="w-24 h-16 object-cover rounded-lg border border-white/10 hover:opacity-80" /></a>}
+                              {u.kyc_selfie_url && <a href={u.kyc_selfie_url} target="_blank" rel="noreferrer" className="block"><img src={u.kyc_selfie_url} alt="Selfie" className="w-24 h-16 object-cover rounded-lg border border-white/10 hover:opacity-80" /></a>}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Login history */}
+                        {userSessions.length > 0 && (
+                          <div className="p-3 rounded-xl bg-white/3 border border-white/5">
+                            <div className="text-sm font-bold mb-2">📍 Login History (last 10)</div>
+                            <div className="space-y-1 max-h-40 overflow-y-auto">
+                              {userSessions.map((s, i) => (
+                                <div key={s.id || i} className="flex items-center gap-2 text-[10px] text-white/40 py-1 border-b border-white/3 last:border-0">
+                                  <span className="font-mono text-white/50 shrink-0">{s.ip_address || '?'}</span>
+                                  <span>{s.city && s.country ? `${s.city}, ${s.country}` : s.country || '?'}</span>
+                                  <span>·</span>
+                                  <span>{s.device}/{s.browser}/{s.os}</span>
+                                  <span className="ml-auto shrink-0 text-white/25">{new Date(s.logged_in_at).toLocaleString()}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Action buttons */}
+                        <div className="flex flex-wrap gap-1.5 pt-2">
+                          <button onClick={async () => { await supabase.from('profiles').update({ is_verified: !u.is_verified }).eq('id', u.id); loadAll(); }}
+                            className={`text-[10px] px-2.5 py-1.5 rounded-lg ${u.is_verified ? 'bg-blue-500/15 text-blue-400' : 'bg-white/5 text-white/30'}`}>
+                            {u.is_verified ? '✔ Verified' : '✔ Give Verified'}
                           </button>
-                        );
-                      })}
-
-                      {/* KYC verify */}
-                      {u.kyc_status === 'pending' && <button onClick={() => verifyUser(u.id)} className="text-[10px] px-2.5 py-1.5 rounded-lg bg-green-500/15 text-green-400 font-semibold">🛡️ Approve KYC</button>}
-
-                      {/* Admin toggle */}
-                      {u.id !== user.id && (
-                        <button onClick={async () => { await supabase.from('profiles').update({ is_admin: !u.is_admin }).eq('id', u.id); loadAll(); }}
-                          className={`text-[10px] px-2.5 py-1.5 rounded-lg ${u.is_admin ? 'bg-purple-500/15 text-purple-400' : 'bg-white/5 text-white/30'}`}>
-                          {u.is_admin ? 'Remove Admin' : '⚙️ Make Admin'}
-                        </button>
-                      )}
-
-                      {/* Suspend / Unsuspend */}
-                      {u.id !== user.id && (
-                        <button onClick={async () => {
-                          if (u.is_suspended) {
-                            await supabase.from('profiles').update({ is_suspended: false, suspension_reason: '' }).eq('id', u.id);
-                          } else {
-                            const reason = prompt('Suspension reason:');
-                            if (!reason) return;
-                            await supabase.from('profiles').update({ is_suspended: true, suspension_reason: reason }).eq('id', u.id);
-                          }
-                          loadAll();
-                        }} className={`text-[10px] px-2.5 py-1.5 rounded-lg ${u.is_suspended ? 'bg-green-500/15 text-green-400' : 'bg-red-500/10 text-red-400'}`}>
-                          {u.is_suspended ? '✅ Unsuspend' : '⛔ Suspend'}
-                        </button>
-                      )}
-                    </div>
+                          {Object.entries(BADGE_TYPES).filter(([k]) => k !== 'verified' && k !== 'trader').map(([key, badge]) => {
+                            const has = userBadges.includes(key);
+                            return (
+                              <button key={key} onClick={async () => {
+                                const nb = has ? userBadges.filter(b => b !== key) : [...userBadges, key];
+                                await supabase.from('profiles').update({ badges: JSON.stringify(nb) }).eq('id', u.id); loadAll();
+                              }} className={`text-[10px] px-2.5 py-1.5 rounded-lg ${has ? 'border' : 'bg-white/5 text-white/30'}`}
+                                style={has ? { background: badge.bg, color: badge.color, borderColor: badge.border } : {}}>
+                                {badge.icon} {has ? badge.label : `${badge.label}`}
+                              </button>
+                            );
+                          })}
+                          {u.kyc_status === 'pending' && <button onClick={() => verifyUser(u.id)} className="text-[10px] px-2.5 py-1.5 rounded-lg bg-green-500/15 text-green-400 font-semibold">🛡️ Approve KYC</button>}
+                          {u.kyc_status === 'pending' && <button onClick={() => rejectUser(u.id)} className="text-[10px] px-2.5 py-1.5 rounded-lg bg-red-500/10 text-red-400">❌ Reject KYC</button>}
+                          {u.id !== user.id && (
+                            <button onClick={async () => { await supabase.from('profiles').update({ is_admin: !u.is_admin }).eq('id', u.id); loadAll(); }}
+                              className={`text-[10px] px-2.5 py-1.5 rounded-lg ${u.is_admin ? 'bg-purple-500/15 text-purple-400' : 'bg-white/5 text-white/30'}`}>
+                              {u.is_admin ? 'Remove Admin' : '⚙️ Make Admin'}
+                            </button>
+                          )}
+                          {u.id !== user.id && (
+                            <button onClick={async () => {
+                              if (u.is_suspended) { await supabase.from('profiles').update({ is_suspended: false, suspension_reason: '' }).eq('id', u.id); }
+                              else { const r = prompt('Suspension reason:'); if (!r) return; await supabase.from('profiles').update({ is_suspended: true, suspension_reason: r }).eq('id', u.id); }
+                              loadAll();
+                            }} className={`text-[10px] px-2.5 py-1.5 rounded-lg ${u.is_suspended ? 'bg-green-500/15 text-green-400' : 'bg-red-500/10 text-red-400'}`}>
+                              {u.is_suspended ? '✅ Unsuspend' : '⛔ Suspend'}
+                            </button>
+                          )}
+                        </div>
+                        {u.suspension_reason && <div className="text-[10px] text-red-400 bg-red-500/10 p-2 rounded-lg">Reason: {u.suspension_reason}</div>}
+                      </div>
+                    )}
                   </div>
                   );
                 })}

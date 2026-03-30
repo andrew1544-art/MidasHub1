@@ -51,6 +51,48 @@ function urlBase64ToUint8Array(base64String) {
   return arr;
 }
 
+// Track user session — device, location, browser fingerprint
+async function trackSession(supabase, userId) {
+  try {
+    if (typeof window === 'undefined') return;
+    const ua = navigator.userAgent;
+    const device = /Mobile|Android|iPhone|iPad/.test(ua) ? (/iPad/.test(ua) ? 'Tablet' : 'Mobile') : 'Desktop';
+    const browser = /Firefox/.test(ua) ? 'Firefox' : /Edg/.test(ua) ? 'Edge' : /Chrome/.test(ua) ? 'Chrome' : /Safari/.test(ua) ? 'Safari' : 'Other';
+    const os = /Windows/.test(ua) ? 'Windows' : /Mac/.test(ua) ? 'macOS' : /Android/.test(ua) ? 'Android' : /iPhone|iPad/.test(ua) ? 'iOS' : /Linux/.test(ua) ? 'Linux' : 'Other';
+    const screen_resolution = `${window.screen.width}x${window.screen.height}`;
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+    const language = navigator.language || '';
+
+    // Get IP + location from free API
+    let ip = '', country = '', city = '';
+    try {
+      const res = await fetch('https://ipapi.co/json/', { signal: AbortSignal.timeout(3000) });
+      if (res.ok) {
+        const geo = await res.json();
+        ip = geo.ip || '';
+        country = geo.country_name || '';
+        city = geo.city || '';
+      }
+    } catch(e) {}
+
+    // Save session log
+    await supabase.from('user_sessions').insert({
+      user_id: userId, ip_address: ip, country, city, device, browser, os,
+      screen_resolution, timezone, language,
+    }).then(() => {});
+
+    // Update profile with latest info
+    await supabase.from('profiles').update({
+      last_ip: ip, last_country: country, last_city: city, last_device: `${device} / ${browser} / ${os}`,
+      last_browser: browser, login_count: undefined, // handled by DB
+    }).eq('id', userId).then(() => {});
+
+    // Increment login count
+    const { data: prof } = await supabase.from('profiles').select('login_count').eq('id', userId).maybeSingle();
+    await supabase.from('profiles').update({ login_count: (prof?.login_count || 0) + 1 }).eq('id', userId);
+  } catch(e) { /* Silent — tracking is non-critical */ }
+}
+
 function friendlyError(msg) {
   if (!msg) return 'Something went wrong. Try again.';
   const m = msg.toLowerCase();
@@ -125,6 +167,7 @@ export const useStore = create((set, get) => ({
         // Background tasks - don't block UI
         requestNotifPermission();
         registerPush(session.user.id);
+        trackSession(supabase, session.user.id);
         startHeartbeat(supabase, session.user.id);
         awardDailyLogin(supabase, session.user.id, set);
       } else {
