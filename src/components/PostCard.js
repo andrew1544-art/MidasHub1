@@ -11,6 +11,7 @@ import EditPostModal from '@/components/EditPostModal';
 import { InlineBadges } from '@/components/Badge';
 
 const URL_REGEX = /(https?:\/\/[^\s<]+[^\s<.,;:!?'")\]}>])/g;
+const MENTION_REGEX = /@([a-zA-Z0-9_]+)/g;
 
 // Make URLs clickable
 function LinkifyContent({ text }) {
@@ -23,6 +24,32 @@ function LinkifyContent({ text }) {
     }
     return part;
   });
+}
+
+// Render text with @mentions as clickable profile links + URLs
+function MentionText({ text, className = '' }) {
+  if (!text) return null;
+  // Split by @mentions first, then linkify each part
+  const parts = [];
+  let lastIndex = 0;
+  const regex = /@([a-zA-Z0-9_]+)/g;
+  let match;
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIndex) parts.push({ type: 'text', value: text.slice(lastIndex, match.index) });
+    parts.push({ type: 'mention', value: match[1] });
+    lastIndex = regex.lastIndex;
+  }
+  if (lastIndex < text.length) parts.push({ type: 'text', value: text.slice(lastIndex) });
+
+  return (
+    <span className={className}>
+      {parts.map((p, i) => p.type === 'mention' ? (
+        <Link key={i} href={`/profile/${p.value.toLowerCase()}`} className="text-[var(--accent)] font-semibold hover:underline">@{p.value}</Link>
+      ) : (
+        <LinkifyContent key={i} text={p.value} />
+      ))}
+    </span>
+  );
 }
 
 // Link preview card — fetches Open Graph data
@@ -147,7 +174,7 @@ function CommentItem({ comment, postOwnerId, onDelete }) {
               </div>
             </div>
           ) : (
-            <p className="text-sm text-white/70 break-words">{displayText}</p>
+            <MentionText text={displayText} className="text-sm text-white/70 break-words" />
           )}
         </div>
       </div>
@@ -276,7 +303,21 @@ export default function PostCard({ post, onPostUpdated }) {
       if (data) {
         setComments(prev => [...prev, data]);
         setCommentsCount(c => c + 1);
+        // Notify post owner
         sendNotification({ toUserId: post.user_id, fromUserId: user.id, type: 'comment', referenceId: post.id, content: `commented: "${text.slice(0, 60)}" 💬` });
+        // Notify @mentioned users
+        const mentions = text.match(/@([a-zA-Z0-9_]+)/g);
+        if (mentions) {
+          const usernames = [...new Set(mentions.map(m => m.slice(1).toLowerCase()))];
+          try {
+            const { data: mentioned } = await supabase.from('profiles').select('id, username').in('username', usernames);
+            (mentioned || []).forEach(m => {
+              if (m.id !== user.id && m.id !== post.user_id) {
+                sendNotification({ toUserId: m.id, fromUserId: user.id, type: 'comment', referenceId: post.id, content: `mentioned you: "${text.slice(0, 60)}" 💬` });
+              }
+            });
+          } catch(e) {}
+        }
       }
     } catch (e) { setCommentText(text); }
   };
@@ -340,9 +381,9 @@ export default function PostCard({ post, onPostUpdated }) {
         </div>
       </div>
 
-      {/* Content with clickable links */}
+      {/* Content with clickable links + @mentions */}
       <div className="text-[15px] leading-relaxed whitespace-pre-wrap break-words">
-        <LinkifyContent text={displayContent} />
+        <MentionText text={displayContent} />
       </div>
 
       {/* Link preview card */}

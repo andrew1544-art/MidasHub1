@@ -16,6 +16,7 @@ export default function EditPostModal({ post, onClose, onSaved }) {
   const [newMediaFiles, setNewMediaFiles] = useState([]);
   const [newMediaPreviews, setNewMediaPreviews] = useState([]);
   const [saving, setSaving] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState('');
   const [error, setError] = useState('');
   const fileRef = useRef(null);
 
@@ -68,50 +69,44 @@ export default function EditPostModal({ post, onClose, onSaved }) {
     try {
       const supabase = createClient();
 
-      // Upload new media in PARALLEL
-      const uploadResults = await Promise.all(
-        newMediaFiles.map(async (file) => {
-          try {
-            const ext = file.name.split('.').pop();
-            const path = `${user.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-            const { data, error } = await supabase.storage.from('media').upload(path, file, { contentType: file.type, cacheControl: '3600' });
-            if (data && !error) {
-              const { data: u } = supabase.storage.from('media').getPublicUrl(data.path);
-              return u.publicUrl;
-            }
-            return null;
-          } catch (e) { return null; }
-        })
-      );
-      const allMediaUrls = [...existingMedia, ...uploadResults.filter(Boolean)];
+      // Step 1: Upload new media WHILE modal is open
+      let uploadedUrls = [];
+      if (newMediaFiles.length) {
+        setUploadStatus(`Uploading ${newMediaFiles.length} file${newMediaFiles.length > 1 ? 's' : ''}...`);
+        const results = await Promise.all(
+          newMediaFiles.map(async (file) => {
+            try {
+              const ext = file.name.split('.').pop();
+              const path = `${user.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+              const { data, error } = await supabase.storage.from('media').upload(path, file, { contentType: file.type, cacheControl: '3600' });
+              if (data && !error) { const { data: u } = supabase.storage.from('media').getPublicUrl(data.path); return u.publicUrl; }
+              return null;
+            } catch (e) { return null; }
+          })
+        );
+        uploadedUrls = results.filter(Boolean);
+      }
 
+      setUploadStatus('Saving...');
+      const allMediaUrls = [...existingMedia, ...uploadedUrls];
       const parsedTags = tags.split(',').map(t => t.trim().replace('#', '').toLowerCase()).filter(Boolean);
-      const hasVideo = allMediaUrls.some(url => /\.(mp4|webm|mov|avi|ogg)$/i.test(url)) || newMediaFiles.some(f => f.type.startsWith('video/'));
+      const hasVideo = allMediaUrls.some(url => /\.(mp4|webm|mov)$/i.test(url)) || newMediaFiles.some(f => f.type.startsWith('video/'));
 
+      // Step 2: DB update (instant — just text)
       const { error: updateErr } = await supabase.from('posts').update({
-        content: content.trim(),
-        source_platform: sourcePlatform,
-        source_url: sourceUrl.trim() || null,
-        tags: parsedTags,
-        media_urls: allMediaUrls,
-        media_type: allMediaUrls.length > 0 ? (hasVideo ? 'video' : 'image') : null,
-        is_public: isPublic,
-        updated_at: new Date().toISOString(),
+        content: content.trim(), source_platform: sourcePlatform,
+        source_url: sourceUrl.trim() || null, tags: parsedTags,
+        media_urls: allMediaUrls, media_type: allMediaUrls.length > 0 ? (hasVideo ? 'video' : 'image') : null,
+        is_public: isPublic, updated_at: new Date().toISOString(),
       }).eq('id', post.id);
 
-      if (updateErr) {
-        setError('Failed to update: ' + updateErr.message);
-        setSaving(false);
-        return;
-      }
+      if (updateErr) { setError('Failed: ' + updateErr.message); setSaving(false); setUploadStatus(''); return; }
 
       showToast?.('Post updated ✓');
       onSaved?.();
       onClose();
-    } catch (e) {
-      setError('Something went wrong');
-    }
-    setSaving(false);
+    } catch (e) { setError('Something went wrong'); }
+    setSaving(false); setUploadStatus('');
   };
 
   const totalMedia = existingMedia.length + newMediaPreviews.length;
@@ -225,7 +220,7 @@ export default function EditPostModal({ post, onClose, onSaved }) {
 
         <div className="flex gap-2">
           <button onClick={handleSave} disabled={!content.trim() || saving} className="btn-primary flex-1 py-3 flex items-center justify-center gap-2 disabled:opacity-40">
-            {saving ? <><span className="animate-spin">⏳</span> Saving...</> : '✓ Save Changes'}
+            {saving ? <><span className="animate-spin">⏳</span> {uploadStatus || 'Saving...'}</> : '✓ Save Changes'}
           </button>
           <button onClick={() => !saving && onClose()} className="btn-secondary px-6 py-3">Cancel</button>
         </div>
