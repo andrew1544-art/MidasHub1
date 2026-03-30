@@ -107,7 +107,12 @@ export default function ComposeModal() {
             if (file.type.startsWith('video/')) hasVideo = true;
             const ext = file.name.split('.').pop();
             const path = `${user.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-            const { data, error } = await supabase.storage.from('media').upload(path, file, { contentType: file.type, cacheControl: '3600' });
+            let { data, error } = await supabase.storage.from('media').upload(path, file, { contentType: file.type, cacheControl: '3600' });
+            if (error) {
+              await ensureFreshAuth();
+              const retry = await supabase.storage.from('media').upload(path, file, { contentType: file.type, cacheControl: '3600' });
+              data = retry.data; error = retry.error;
+            }
             if (data && !error) {
               const { data: u } = supabase.storage.from('media').getPublicUrl(data.path);
               return u.publicUrl;

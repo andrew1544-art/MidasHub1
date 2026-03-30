@@ -225,6 +225,28 @@ function FeedInner() {
     setPullDistance(0);
   }, [fetchPosts]);
 
+  // Soft-refresh for short background returns (under reload threshold)
+  useEffect(() => {
+    let bgTime = 0;
+    const handler = async () => {
+      if (document.visibilityState === 'hidden') { bgTime = Date.now(); return; }
+      if (!bgTime) return;
+      const away = Date.now() - bgTime;
+      bgTime = 0;
+      // Only soft-refresh if under the hard-reload threshold
+      // (hard reload handles longer absences via layout.js)
+      if (away > 2000 && away < 15000) {
+        try {
+          const { ensureFreshAuth } = await import('@/lib/supabase-browser');
+          await ensureFreshAuth();
+        } catch(e) {}
+        refreshFeed(false);
+      }
+    };
+    document.addEventListener('visibilitychange', handler);
+    return () => document.removeEventListener('visibilitychange', handler);
+  }, [refreshFeed]);
+
   // Pull-to-refresh handlers
   const onTouchStart = useCallback((e) => {
     if (window.scrollY <= 5) {

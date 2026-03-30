@@ -59,7 +59,7 @@ export default function RootLayout({ children }) {
               if (e.data && e.data.type === 'RELOAD') window.location.reload();
             });
           }
-          // Auto-reload after 5s in background
+          // Auto-reload after being away
           var _bg = 0;
           document.addEventListener('visibilitychange', function() {
             if (document.visibilityState === 'hidden') {
@@ -68,9 +68,20 @@ export default function RootLayout({ children }) {
                 sessionStorage.setItem('mh-scroll', String(window.scrollY));
                 sessionStorage.setItem('mh-path', window.location.pathname);
                 sessionStorage.setItem('mh-time', String(Date.now()));
+                // Check if compose modal is open
+                var composeOpen = document.querySelector('.modal-overlay') !== null;
+                if (composeOpen) sessionStorage.setItem('mh-compose-open', '1');
               } catch(e) {}
             }
-            else if (_bg && Date.now() - _bg > 5000) { window.location.reload(); }
+            else if (_bg) {
+              var away = Date.now() - _bg;
+              // If compose was open, give more time (30s) before reloading
+              var wasComposing = false;
+              try { wasComposing = sessionStorage.getItem('mh-compose-open') === '1'; } catch(e) {}
+              var threshold = wasComposing ? 30000 : 15000;
+              if (away > threshold) { window.location.reload(); }
+              try { sessionStorage.removeItem('mh-compose-open'); } catch(e) {}
+            }
           });
           // Restore scroll after reload
           try {

@@ -348,20 +348,21 @@ export const useStore = create((set, get) => ({
       }
       const parsedTags = (tags || '').split(',').map(t => t.trim().replace('#', '').toLowerCase()).filter(Boolean);
       const urls = mediaUrls || [];
-
-      const { error: postErr } = await supabase.from('posts').insert({
-        user_id: user.id,
-        content: finalContent,
+      const postData = {
+        user_id: user.id, content: finalContent,
         source_platform: sourcePlatform || 'midashub',
-        source_url: sourceUrl?.trim() || null,
-        media_urls: urls,
+        source_url: sourceUrl?.trim() || null, media_urls: urls,
         media_type: urls.length > 0 ? (hasVideo ? 'video' : 'image') : null,
-        tags: parsedTags,
-        is_public: isPublic !== false,
-      });
+        tags: parsedTags, is_public: isPublic !== false,
+      };
 
+      let { error: postErr } = await supabase.from('posts').insert(postData);
       if (postErr) {
-        get().showToast?.('❌ Post failed: ' + postErr.message);
+        // Retry with fresh auth
+        await ensureFreshAuth();
+        const { error: retryErr } = await supabase.from('posts').insert(postData);
+        if (retryErr) { get().showToast?.('❌ Post failed. Try again.'); }
+        else { get().showToast?.('Posted! ⚡'); window.dispatchEvent(new Event('midashub:newpost')); }
       } else {
         get().showToast?.('Posted! ⚡');
         window.dispatchEvent(new Event('midashub:newpost'));
