@@ -43,6 +43,25 @@ function ChatInner() {
   const [uploading, setUploading] = useState(false);
   const endRef = useRef(null);
   const startedRef = useRef(false);
+
+  // Save/restore chat drafts per conversation
+  useEffect(() => {
+    if (activeConvo) {
+      try { sessionStorage.setItem('mh-chat-convo', activeConvo); } catch(e) {}
+      // Restore draft for this conversation
+      try {
+        const draft = sessionStorage.getItem('mh-chat-draft-' + activeConvo);
+        if (draft) setText(draft);
+      } catch(e) {}
+    }
+  }, [activeConvo]);
+
+  // Save draft as user types
+  useEffect(() => {
+    if (activeConvo && text) {
+      try { sessionStorage.setItem('mh-chat-draft-' + activeConvo, text); } catch(e) {}
+    }
+  }, [text, activeConvo]);
   const fileRef = useRef(null);
   const msgsRef = useRef([]);
   const sb = createClient();
@@ -139,12 +158,18 @@ function ChatInner() {
   // Init
   useEffect(() => {
     if (!user) { setLoading(false); return; }
-    // Safety: force loading off after 3s no matter what
     const safety = setTimeout(() => setLoading(false), 3000);
     (async () => {
       await loadConvos();
       const t = searchParams.get('user');
       if (t && !startedRef.current) { startedRef.current = true; await startChat(t); }
+      // Restore active conversation after reload
+      else if (!startedRef.current) {
+        try {
+          const savedConvo = sessionStorage.getItem('mh-chat-convo');
+          if (savedConvo) { await openConvo(savedConvo); startedRef.current = true; }
+        } catch(e) {}
+      }
       clearTimeout(safety);
     })();
     return () => clearTimeout(safety);
@@ -222,6 +247,7 @@ function ChatInner() {
     if (!text.trim() || sending) return;
     const msg = text.trim();
     setSending(true); setText('');
+    try { sessionStorage.removeItem('mh-chat-draft-' + activeConvo); } catch(e) {}
     // Optimistic: show message immediately
     const optimistic = { id: 'temp-' + Date.now(), sender_id: user.id, content: msg, created_at: new Date().toISOString(), profiles: { display_name: profile?.display_name, avatar_emoji: profile?.avatar_emoji } };
     msgsRef.current = [...msgsRef.current, optimistic];
@@ -296,7 +322,7 @@ function ChatInner() {
               ) : (<>
                 {/* Header */}
                 <div className="flex items-center gap-3 p-3 border-b border-white/5">
-                  <button onClick={() => { setActiveConvo(null); setOtherUser(null); setShowEmoji(false); msgsRef.current = []; loadConvos(); }} className="md:hidden text-white/40 text-lg">←</button>
+                  <button onClick={() => { setActiveConvo(null); setOtherUser(null); setShowEmoji(false); msgsRef.current = []; setText(''); try { sessionStorage.removeItem('mh-chat-convo'); } catch(e) {} loadConvos(); }} className="md:hidden text-white/40 text-lg">←</button>
                   <Link href={`/profile/${otherUser?.username}`} className="flex items-center gap-3 hover:opacity-80 transition flex-1 min-w-0">
                     <span className="text-2xl">{otherUser?.avatar_emoji||'😎'}</span>
                     <div className="min-w-0">
