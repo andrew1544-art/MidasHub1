@@ -19,6 +19,7 @@ export default function AdminPage() {
   const [escrowMethods, setEscrowMethods] = useState([]);
   const [categories, setCategories] = useState([]);
   const [kycQueue, setKycQueue] = useState([]);
+  const [approvedKyc, setApprovedKyc] = useState([]);
   const [posts, setPosts] = useState([]);
   const [tradeRoles, setTradeRoles] = useState([]);
   const [feedbackList, setFeedbackList] = useState([]);
@@ -102,6 +103,7 @@ export default function AdminPage() {
       }
       if (tab === 'kyc') {
         try { const { data } = await supabase.from('profiles').select('*').eq('kyc_status', 'pending').order('kyc_submitted_at', { ascending: false }); setKycQueue(data || []); } catch(e) { setKycQueue([]); }
+        try { const { data } = await supabase.from('profiles').select('*').eq('kyc_status', 'verified').order('kyc_verified_at', { ascending: false }).limit(50); setApprovedKyc(data || []); } catch(e) {}
       }
       if (tab === 'posts') {
         try { const { data } = await supabase.from('posts').select('*, profiles(*)').order('created_at', { ascending: false }).limit(100); setPosts(data || []); } catch(e) { setPosts([]); }
@@ -110,7 +112,15 @@ export default function AdminPage() {
         try { const { data } = await supabase.from('trade_roles').select('*').order('display_order'); setTradeRoles(data || []); } catch(e) { setTradeRoles([]); }
       }
       if (tab === 'feedback') {
-        try { const { data } = await supabase.from('feedback').select('*, profiles:user_id(display_name, username, avatar_emoji, email)').order('created_at', { ascending: false }).limit(100); setFeedbackList(data || []); } catch(e) { setFeedbackList([]); }
+        try {
+          const { data: fb } = await supabase.from('feedback').select('*').order('created_at', { ascending: false }).limit(100);
+          if (fb?.length) {
+            const userIds = [...new Set(fb.filter(f => f.user_id).map(f => f.user_id))];
+            const { data: profs } = await supabase.from('profiles').select('id, display_name, username, avatar_emoji, email').in('id', userIds);
+            const profMap = new Map((profs||[]).map(p => [p.id, p]));
+            setFeedbackList(fb.map(f => ({ ...f, profiles: profMap.get(f.user_id) || null })));
+          } else { setFeedbackList([]); }
+        } catch(e) { setFeedbackList([]); }
       }
     } catch (e) { console.error('Admin load error:', e); }
     setLoading(false);
@@ -405,34 +415,62 @@ export default function AdminPage() {
 
             {/* ===== KYC QUEUE ===== */}
             {tab === 'kyc' && (
-              <div className="space-y-3">
-                <div className="text-xs text-white/30 mb-2">{kycQueue.length} pending verifications</div>
-                {kycQueue.length === 0 && <div className="text-center py-12 text-white/20">No pending KYC requests</div>}
-                {kycQueue.map(u => (
-                  <div key={u.id} className="glass-light rounded-xl p-4 space-y-3">
-                    <div className="flex items-center gap-3">
-                      <span className="text-3xl">{u.avatar_emoji || '😎'}</span>
-                      <div className="flex-1">
-                        <div className="font-bold text-sm">{u.display_name} <span className="text-white/25 font-normal">@{u.username}</span></div>
-                        <div className="text-[10px] text-white/30">Submitted {timeAgo(u.kyc_submitted_at)}</div>
+              <div className="space-y-6">
+                {/* PENDING */}
+                <div>
+                  <div className="text-xs text-white/30 mb-2 font-bold uppercase">⏳ Pending ({kycQueue.length})</div>
+                  {kycQueue.length === 0 && <div className="text-center py-8 text-white/20 text-sm">No pending KYC requests ✓</div>}
+                  <div className="space-y-3">
+                    {kycQueue.map(u => (
+                      <div key={u.id} className="glass-light rounded-xl p-4 space-y-3 border border-yellow-500/20">
+                        <div className="flex items-center gap-3">
+                          <span className="text-3xl">{u.avatar_emoji || '😎'}</span>
+                          <div className="flex-1">
+                            <div className="font-bold text-sm">{u.display_name} <span className="text-white/25 font-normal">@{u.username}</span></div>
+                            <div className="text-[10px] text-white/30">Submitted {timeAgo(u.kyc_submitted_at)} · {u.email || 'No email'}</div>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                          <div className="p-2 rounded-lg bg-white/3"><span className="text-white/30">Name:</span> <strong>{u.kyc_full_name}</strong></div>
+                          <div className="p-2 rounded-lg bg-white/3"><span className="text-white/30">Phone:</span> <strong>{u.kyc_phone}</strong></div>
+                          <div className="p-2 rounded-lg bg-white/3"><span className="text-white/30">Country:</span> <strong>{u.kyc_country}</strong></div>
+                          <div className="p-2 rounded-lg bg-white/3"><span className="text-white/30">ID:</span> <strong>{u.kyc_id_type} — {u.kyc_id_number}</strong></div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          {u.kyc_id_photo_url && <a href={u.kyc_id_photo_url} target="_blank" rel="noopener noreferrer" className="block aspect-video rounded-xl overflow-hidden bg-white/5"><img src={u.kyc_id_photo_url} alt="ID" className="w-full h-full object-cover" /><div className="text-[9px] text-center text-white/30 -mt-5 relative z-10 bg-black/50 py-0.5">📄 ID Photo</div></a>}
+                          {u.kyc_selfie_url && <a href={u.kyc_selfie_url} target="_blank" rel="noopener noreferrer" className="block aspect-video rounded-xl overflow-hidden bg-white/5"><img src={u.kyc_selfie_url} alt="Selfie" className="w-full h-full object-cover" /><div className="text-[9px] text-center text-white/30 -mt-5 relative z-10 bg-black/50 py-0.5">🤳 Selfie</div></a>}
+                        </div>
+                        <div className="flex gap-2">
+                          <button onClick={() => verifyUser(u.id)} className="btn-primary py-2 px-4 text-xs flex-1">✅ Approve</button>
+                          <button onClick={() => rejectUser(u.id)} className="btn-secondary py-2 px-4 text-xs text-red-400 border-red-500/20 flex-1">❌ Reject</button>
+                        </div>
                       </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2 text-xs">
-                      <div className="p-2 rounded-lg bg-white/3"><span className="text-white/30">Name:</span> <strong>{u.kyc_full_name}</strong></div>
-                      <div className="p-2 rounded-lg bg-white/3"><span className="text-white/30">Phone:</span> <strong>{u.kyc_phone}</strong></div>
-                      <div className="p-2 rounded-lg bg-white/3"><span className="text-white/30">Country:</span> <strong>{u.kyc_country}</strong></div>
-                      <div className="p-2 rounded-lg bg-white/3"><span className="text-white/30">ID:</span> <strong>{u.kyc_id_type} — {u.kyc_id_number}</strong></div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      {u.kyc_id_photo_url && <a href={u.kyc_id_photo_url} target="_blank" rel="noopener noreferrer" className="block aspect-video rounded-xl overflow-hidden bg-white/5"><img src={u.kyc_id_photo_url} alt="ID" className="w-full h-full object-cover" /><div className="text-[9px] text-center text-white/30 -mt-5 relative z-10 bg-black/50 py-0.5">📄 ID Photo</div></a>}
-                      {u.kyc_selfie_url && <a href={u.kyc_selfie_url} target="_blank" rel="noopener noreferrer" className="block aspect-video rounded-xl overflow-hidden bg-white/5"><img src={u.kyc_selfie_url} alt="Selfie" className="w-full h-full object-cover" /><div className="text-[9px] text-center text-white/30 -mt-5 relative z-10 bg-black/50 py-0.5">🤳 Selfie</div></a>}
-                    </div>
-                    <div className="flex gap-2">
-                      <button onClick={() => verifyUser(u.id)} className="btn-primary py-2 px-4 text-xs flex-1">✅ Approve</button>
-                      <button onClick={() => rejectUser(u.id)} className="btn-secondary py-2 px-4 text-xs text-red-400 border-red-500/20 flex-1">❌ Reject</button>
-                    </div>
+                    ))}
                   </div>
-                ))}
+                </div>
+
+                {/* APPROVED */}
+                <div>
+                  <div className="text-xs text-white/30 mb-2 font-bold uppercase">✅ Approved ({approvedKyc.length})</div>
+                  <div className="space-y-2">
+                    {approvedKyc.map(u => (
+                      <div key={u.id} className="glass-light rounded-xl p-3">
+                        <div className="flex items-center gap-3">
+                          <span className="text-xl">{u.avatar_emoji || '😎'}</span>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5"><span className="font-bold text-sm truncate">{u.display_name}</span><span className="text-[9px] px-1.5 py-0.5 rounded-full bg-green-500/15 text-green-400 font-bold">VERIFIED</span></div>
+                            <div className="text-[10px] text-white/30">{u.kyc_full_name} · {u.kyc_phone} · {u.kyc_country} · {u.kyc_id_type}: {u.kyc_id_number}</div>
+                          </div>
+                          <div className="flex gap-1 shrink-0">
+                            {u.kyc_id_photo_url && <a href={u.kyc_id_photo_url} target="_blank" rel="noreferrer"><img src={u.kyc_id_photo_url} alt="ID" className="w-10 h-8 object-cover rounded border border-white/10" /></a>}
+                            {u.kyc_selfie_url && <a href={u.kyc_selfie_url} target="_blank" rel="noreferrer"><img src={u.kyc_selfie_url} alt="Self" className="w-10 h-8 object-cover rounded border border-white/10" /></a>}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    {approvedKyc.length === 0 && <div className="text-center py-6 text-white/20 text-sm">No approved KYCs yet</div>}
+                  </div>
+                </div>
               </div>
             )}
 

@@ -10,6 +10,72 @@ import MediaViewer from '@/components/MediaViewer';
 import EditPostModal from '@/components/EditPostModal';
 import { InlineBadges } from '@/components/Badge';
 
+const URL_REGEX = /(https?:\/\/[^\s<]+[^\s<.,;:!?'")\]}>])/g;
+
+// Make URLs clickable
+function LinkifyContent({ text }) {
+  if (!text) return null;
+  const parts = text.split(URL_REGEX);
+  return parts.map((part, i) => {
+    if (URL_REGEX.test(part)) {
+      URL_REGEX.lastIndex = 0;
+      return <a key={i} href={part} target="_blank" rel="noopener noreferrer" className="text-[var(--accent)] hover:underline break-all">{part.length > 50 ? part.slice(0, 50) + '...' : part}</a>;
+    }
+    return part;
+  });
+}
+
+// Link preview card — fetches Open Graph data
+function LinkPreview({ text }) {
+  const [preview, setPreview] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!text) return;
+    const match = text.match(URL_REGEX);
+    URL_REGEX.lastIndex = 0;
+    if (!match) return;
+    const url = match[0];
+    // Skip media URLs (already shown as images/videos)
+    if (/\.(jpg|jpeg|png|gif|webp|mp4|webm|mov)(\?|$)/i.test(url)) return;
+
+    setLoading(true);
+    // Use a free OG proxy
+    const fetchPreview = async () => {
+      try {
+        const res = await fetch(`https://api.microlink.io?url=${encodeURIComponent(url)}&palette=true`, { signal: AbortSignal.timeout(5000) });
+        if (!res.ok) { setLoading(false); return; }
+        const data = await res.json();
+        if (data.status === 'success' && data.data) {
+          setPreview({
+            title: data.data.title,
+            description: data.data.description,
+            image: data.data.image?.url || data.data.logo?.url,
+            url: data.data.url || url,
+            publisher: data.data.publisher,
+          });
+        }
+      } catch(e) {}
+      setLoading(false);
+    };
+    fetchPreview();
+  }, [text]);
+
+  if (!preview) return null;
+
+  return (
+    <a href={preview.url} target="_blank" rel="noopener noreferrer"
+      className="block mt-3 rounded-xl border border-white/10 overflow-hidden hover:border-white/20 transition bg-white/3">
+      {preview.image && <img src={preview.image} alt="" className="w-full h-40 object-cover" loading="lazy" onError={e => e.target.style.display = 'none'} />}
+      <div className="p-3">
+        {preview.publisher && <div className="text-[10px] text-white/30 mb-1">{preview.publisher}</div>}
+        {preview.title && <div className="text-sm font-semibold leading-snug line-clamp-2">{preview.title}</div>}
+        {preview.description && <div className="text-xs text-white/40 mt-1 line-clamp-2">{preview.description}</div>}
+      </div>
+    </a>
+  );
+}
+
 function CommentItem({ comment, postOwnerId, onDelete }) {
   const { user, showToast } = useStore();
   const [editing, setEditing] = useState(false);
@@ -274,8 +340,13 @@ export default function PostCard({ post, onPostUpdated }) {
         </div>
       </div>
 
-      {/* Content */}
-      <p className="text-[15px] leading-relaxed whitespace-pre-wrap break-words">{displayContent}</p>
+      {/* Content with clickable links */}
+      <div className="text-[15px] leading-relaxed whitespace-pre-wrap break-words">
+        <LinkifyContent text={displayContent} />
+      </div>
+
+      {/* Link preview card */}
+      <LinkPreview text={displayContent} />
 
       {displayTags.length > 0 && <div className="flex flex-wrap gap-1.5 mt-2">{displayTags.map(tag => <span key={tag} className="text-xs text-[var(--accent)] opacity-70">#{tag}</span>)}</div>}
 
