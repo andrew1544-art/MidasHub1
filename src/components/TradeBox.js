@@ -222,7 +222,7 @@ export function StartTradeButton({ conversationId, otherUserId, onTradeCreated }
       const { data, error: err } = await sb.from('trades').insert(ins).select().single();
       if (err) { setError(err.message); setCreating(false); return; }
       await sb.from('trade_messages').insert({ trade_id: data.id, content: `🔒 New Trade Created\n━━━━━━━━━━━━━━━\n📦 ${form.title}\n💰 ${form.currency} ${parseFloat(form.amount).toFixed(2)} (+2% escrow fee)\n📦 Delivery: ${delivery}\n\nWaiting for ${role === 'seller' ? 'buyer' : 'seller'} to accept.`, is_system: true });
-      sendNotification({ toUserId: otherUserId, fromUserId: user.id, type: 'system', content: `wants to trade: "${form.title}" — ${form.currency} ${parseFloat(form.amount).toFixed(2)}` });
+      sendNotification({ toUserId: otherUserId, fromUserId: user.id, type: 'system', content: `🔒 wants to start a trade with you: "${form.title}" for ${form.currency} ${parseFloat(form.amount).toFixed(2)}. Open your chat to review and accept!` });
       alertAdmins({ fromUserId: user.id, type: 'system', content: `🔒 New trade: "${form.title}" — ${form.currency} ${parseFloat(form.amount).toFixed(2)} (fee: ${form.currency} ${(parseFloat(form.amount) * 0.02).toFixed(2)})`, referenceId: data.id });
       setOpen(false); setForm({ title: '', description: '', amount: '', currency: 'USD', paymentMethod: '', categoryId: '' }); setRole(null); setDeliveryEst('');
       showToast?.('Trade created ✓');
@@ -364,7 +364,14 @@ export function TradeCard({ trade, onUpdate }) {
       }
       await sb.from('trades').update(ud).eq('id', trade.id);
       const other = isSeller ? trade.buyer_id : trade.seller_id;
-      const msgs = { accepted: 'accepted the trade 🤝', paid: 'sent payment 💰', delivered: 'marked as delivered 📦', completed: 'confirmed receipt — trade complete! 🎉', disputed: 'raised a dispute ⚠️', cancelled: 'cancelled the trade ❌' };
+      const msgs = {
+        accepted: '🤝 accepted your trade! Open chat to continue.',
+        paid: '💰 sent payment! Check escrow details in chat.',
+        delivered: '📦 marked as delivered! Open chat to confirm receipt.',
+        completed: '🎉 confirmed receipt — trade complete! Leave a review.',
+        disputed: '⚠️ raised a dispute on your trade. Open chat to respond.',
+        cancelled: '❌ cancelled the trade.',
+      };
       sendNotification({ toUserId: other, fromUserId: user.id, type: 'system', content: `Trade "${trade.title}": ${msgs[newStatus] || newStatus}` });
       // System message in trade chat
       await sb.from('trade_messages').insert({ trade_id: trade.id, content: `${config.icon} Trade ${msgs[newStatus] || newStatus}`, is_system: true });
