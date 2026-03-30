@@ -92,7 +92,7 @@ function FeedInner() {
   // Load posts with safety timeout
   useEffect(() => {
     setLoading(true); pageRef.current = 0;
-    const safety = setTimeout(() => setLoading(false), 3000);
+    const safety = setTimeout(() => setLoading(false), 1500);
     fetchPosts(0).finally(() => clearTimeout(safety));
     return () => clearTimeout(safety);
   }, [filter, fetchPosts]);

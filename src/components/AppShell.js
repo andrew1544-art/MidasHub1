@@ -13,7 +13,7 @@ export default function AppShell({ children }) {
   useEffect(() => {
     initAuth();
     loadTheme();
-    const fallback = setTimeout(() => setForceShow(true), 2000);
+    const fallback = setTimeout(() => setForceShow(true), 1500);
     return () => clearTimeout(fallback);
   }, []);
 
@@ -23,7 +23,7 @@ export default function AppShell({ children }) {
       try {
         const draft = sessionStorage.getItem('mh-draft');
         if (draft && draft.trim()) {
-          setTimeout(() => setShowCompose(true), 500);
+          setShowCompose(true); // immediate, no delay
         }
       } catch(e) {}
     }
