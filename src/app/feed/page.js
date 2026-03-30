@@ -27,25 +27,39 @@ function FeedInner() {
   const pageRef = useRef(0);
   const hasMoreRef = useRef(true);
   const loadingMoreRef = useRef(false);
+  const postsCountRef = useRef(0);
+
+  // Keep ref in sync
+  useEffect(() => { postsCountRef.current = posts.length; }, [posts.length]);
 
   const fetchPosts = useCallback(async (pageNum = 0, append = false) => {
     try {
       const supabase = createClient();
       let query = supabase.from('posts').select('*, profiles(*)').order('created_at', { ascending: false }).range(pageNum * PAGE_SIZE, (pageNum + 1) * PAGE_SIZE - 1);
       if (filter !== 'all') query = query.eq('source_platform', filter);
-      // Non-logged-in users only see public posts
       if (!user) query = query.eq('is_public', true);
-      const { data, error } = await query;
-      if (error) {
-        await new Promise(r => setTimeout(r, 500));
+      let { data, error } = await query;
+
+      // If query failed OR returned empty when we have posts — connection is stale
+      if (error || (pageNum === 0 && !append && (!data || data.length === 0) && postsCountRef.current > 0)) {
+        // Refresh auth and retry
         const { ensureFreshAuth } = await import('@/lib/supabase-browser');
         await ensureFreshAuth();
         const retry = await supabase.from('posts').select('*, profiles(*)').order('created_at', { ascending: false }).range(pageNum * PAGE_SIZE, (pageNum + 1) * PAGE_SIZE - 1);
-        if (retry.error || !retry.data) { setLoading(false); setLoadingMore(false); loadingMoreRef.current = false; return; }
-        const data2 = retry.data;
-        // Check liked/bookmarked/reposted for retry data too
-        if (user && data2.length) {
-          const ids = data2.map(p => p.id);
+        if (retry.data && retry.data.length > 0) {
+          data = retry.data;
+          error = null;
+        } else {
+          // Still failing — keep existing posts, don't blank the screen
+          setLoading(false); setLoadingMore(false); loadingMoreRef.current = false;
+          setRefreshing(false);
+          return;
+        }
+      }
+
+      if (data && data.length > 0) {
+        if (user) {
+          const ids = data.map(p => p.id);
           const [lr, br, rr] = await Promise.all([
             supabase.from('likes').select('post_id').eq('user_id', user.id).in('post_id', ids),
             supabase.from('bookmarks').select('post_id').eq('user_id', user.id).in('post_id', ids),
@@ -54,33 +68,16 @@ function FeedInner() {
           const liked = new Set((lr.data||[]).map(l=>l.post_id));
           const bk = new Set((br.data||[]).map(b=>b.post_id));
           const rp = new Set((rr.data||[]).map(r=>r.post_id));
-          data2.forEach(p => { p.user_liked = liked.has(p.id); p.user_bookmarked = bk.has(p.id); p.user_reposted = rp.has(p.id); });
-        }
-        append ? setPosts(prev => [...prev, ...data2]) : setPosts(data2);
-        setHasMore(data2.length === PAGE_SIZE); hasMoreRef.current = data2.length === PAGE_SIZE;
-        setLoading(false); setLoadingMore(false); loadingMoreRef.current = false;
-        return;
-      }
-      if (data) {
-        if (user) {
-          const ids = data.map(p => p.id);
-          if (ids.length) {
-            const [lr, br, rr] = await Promise.all([
-              supabase.from('likes').select('post_id').eq('user_id', user.id).in('post_id', ids),
-              supabase.from('bookmarks').select('post_id').eq('user_id', user.id).in('post_id', ids),
-              supabase.from('reposts').select('post_id').eq('user_id', user.id).in('post_id', ids),
-            ]);
-            const liked = new Set((lr.data||[]).map(l=>l.post_id));
-            const bk = new Set((br.data||[]).map(b=>b.post_id));
-            const rp = new Set((rr.data||[]).map(r=>r.post_id));
-            data.forEach(p => { p.user_liked = liked.has(p.id); p.user_bookmarked = bk.has(p.id); p.user_reposted = rp.has(p.id); });
-          }
+          data.forEach(p => { p.user_liked = liked.has(p.id); p.user_bookmarked = bk.has(p.id); p.user_reposted = rp.has(p.id); });
         }
         append ? setPosts(prev => [...prev, ...data]) : setPosts(data);
         const more = data.length === PAGE_SIZE;
         setHasMore(more); hasMoreRef.current = more;
+      } else if (pageNum === 0 && !append && postsCountRef.current === 0) {
+        // Genuinely no posts (first load, empty DB)
+        setPosts([]);
       }
-    } catch (e) { console.error('Feed exception:', e); }
+    } catch (e) { /* Keep existing posts on error */ }
     setLoading(false); setLoadingMore(false); loadingMoreRef.current = false;
   }, [filter, user]);
 
@@ -223,9 +220,17 @@ function FeedInner() {
 
   // Auto-refresh when app returns from background
   useEffect(() => {
-    const onVisible = () => {
+    let bgTime = 0;
+    const onVisible = async () => {
+      if (document.visibilityState === 'hidden') { bgTime = Date.now(); return; }
       if (document.visibilityState === 'visible') {
-        refreshFeed(false);
+        const away = bgTime ? Date.now() - bgTime : 0;
+        // Refresh auth first, then fetch
+        try {
+          const { ensureFreshAuth } = await import('@/lib/supabase-browser');
+          await ensureFreshAuth();
+        } catch(e) {}
+        refreshFeed(away > 10000); // show indicator if away > 10s
       }
     };
     document.addEventListener('visibilitychange', onVisible);
