@@ -271,6 +271,66 @@ export const useStore = create((set, get) => ({
 
   // === CHAT UNREAD — single fast query ===
   unreadChatCount: 0,
+  postingInBackground: false,
+
+  // === BACKGROUND POST — survives navigation ===
+  backgroundPost: async ({ content, sourcePlatform, sourceUrl, tags, mediaFiles, isPublic, quote }) => {
+    const supabase = getSupabase();
+    const { user, profile } = get();
+    if (!user || !supabase) return;
+    set({ postingInBackground: true });
+    get().showToast?.('📤 Posting in background...');
+
+    try {
+      let hasVideo = false;
+      let mediaUrls = [];
+      
+      // Upload media in parallel
+      if (mediaFiles?.length) {
+        const results = await Promise.all(mediaFiles.map(async (file) => {
+          try {
+            if (file.type.startsWith('video/')) hasVideo = true;
+            const ext = file.name.split('.').pop();
+            const path = `${user.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+            const { data, error } = await supabase.storage.from('media').upload(path, file, { contentType: file.type, cacheControl: '3600' });
+            if (data && !error) {
+              const { data: u } = supabase.storage.from('media').getPublicUrl(data.path);
+              return u.publicUrl;
+            }
+            return null;
+          } catch(e) { return null; }
+        }));
+        mediaUrls = results.filter(Boolean);
+      }
+
+      let finalContent = content.trim();
+      if (quote) {
+        finalContent += `\n\n💬 Reposting @${quote.username}:\n"${quote.content.slice(0, 200)}${quote.content.length > 200 ? '...' : ''}"`;
+      }
+      const parsedTags = (tags || '').split(',').map(t => t.trim().replace('#', '').toLowerCase()).filter(Boolean);
+
+      const { error: postErr } = await supabase.from('posts').insert({
+        user_id: user.id,
+        content: finalContent,
+        source_platform: sourcePlatform || 'midashub',
+        source_url: sourceUrl?.trim() || null,
+        media_urls: mediaUrls,
+        media_type: mediaUrls.length > 0 ? (hasVideo ? 'video' : 'image') : null,
+        tags: parsedTags,
+        is_public: isPublic !== false,
+      });
+
+      if (postErr) {
+        get().showToast?.('❌ Post failed: ' + postErr.message);
+      } else {
+        get().showToast?.('Posted! ⚡');
+        window.dispatchEvent(new Event('midashub:newpost'));
+      }
+    } catch(e) {
+      get().showToast?.('❌ Post failed. Try again.');
+    }
+    set({ postingInBackground: false });
+  },
 
   fetchUnreadChats: async () => {
     const supabase = getSupabase();

@@ -6,19 +6,17 @@ import { PLATFORMS, PLATFORM_LIST } from '@/lib/constants';
 import { compressImage, checkVideoSize, formatSize } from '@/lib/media';
 
 export default function ComposeModal() {
-  const { showCompose, setShowCompose, user, profile, showToast } = useStore();
+  const { showCompose, setShowCompose, user, profile, showToast, backgroundPost, postingInBackground } = useStore();
   const [content, setContent] = useState('');
   const [sourcePlatform, setSourcePlatform] = useState('midashub');
   const [sourceUrl, setSourceUrl] = useState('');
   const [tags, setTags] = useState('');
   const [mediaFiles, setMediaFiles] = useState([]);
   const [mediaPreviews, setMediaPreviews] = useState([]);
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showCrossPost, setShowCrossPost] = useState(false);
   const [quote, setQuote] = useState(null);
   const [isPublic, setIsPublic] = useState(true);
-  const [uploadProgress, setUploadProgress] = useState('');
   const fileRef = useRef(null);
 
   // Pick up quote repost from PostCard
@@ -76,58 +74,35 @@ export default function ComposeModal() {
   };
 
   const handlePost = async () => {
-    if (!content.trim() || loading) return;
-    setLoading(true); setError(''); setUploadProgress('');
-    try {
-      const supabase = createClient();
-      let hasVideo = false;
-      
-      // Upload ALL media in PARALLEL with progress
-      if (mediaFiles.length) setUploadProgress(`Uploading ${mediaFiles.length} file${mediaFiles.length > 1 ? 's' : ''}...`);
-      const uploadPromises = mediaFiles.map(async (file) => {
-        try {
-          if (file.type.startsWith('video/')) hasVideo = true;
-          const ext = file.name.split('.').pop();
-          const path = `${user.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-          const { data, error } = await supabase.storage.from('media').upload(path, file, { contentType: file.type, cacheControl: '3600' });
-          if (data && !error) {
-            const { data: u } = supabase.storage.from('media').getPublicUrl(data.path);
-            return u.publicUrl;
-          }
-          return null;
-        } catch (e) { return null; }
-      });
-      const results = await Promise.all(uploadPromises);
-      const mediaUrls = results.filter(Boolean);
-      setUploadProgress('Publishing...');
-
-      const parsedTags = tags.split(',').map(t => t.trim().replace('#', '').toLowerCase()).filter(Boolean);
-      let finalContent = content.trim();
-      if (quote) {
-        finalContent += `\n\n💬 Reposting @${quote.username}:\n"${quote.content.slice(0, 200)}${quote.content.length > 200 ? '...' : ''}"`;
-      }
-      const { error: postErr } = await supabase.from('posts').insert({
-        user_id: user.id, content: finalContent, source_platform: sourcePlatform,
-        source_url: sourceUrl.trim() || null, media_urls: mediaUrls,
-        media_type: mediaUrls.length > 0 ? (hasVideo ? 'video' : 'image') : null, tags: parsedTags,
-        is_public: isPublic,
-      });
-      if (postErr) { setError('Failed to post: ' + (postErr.message || 'Unknown error')); setLoading(false); return; }
-      setContent(''); setSourcePlatform('midashub'); setSourceUrl(''); setTags('');
-      setMediaFiles([]); setMediaPreviews([]); setQuote(null); setShowCompose(false);
-      showToast('Posted! ⚡');
-      window.dispatchEvent(new Event('midashub:newpost'));
-    } catch (err) { setError('Something went wrong. Try again.'); }
-    setLoading(false); setUploadProgress('');
+    if (!content.trim() || postingInBackground) return;
+    setError('');
+    
+    // Close modal immediately — post continues in background
+    const postData = {
+      content: content.trim(),
+      sourcePlatform,
+      sourceUrl: sourceUrl.trim(),
+      tags,
+      mediaFiles: [...mediaFiles], // copy array before clearing state
+      isPublic,
+      quote,
+    };
+    
+    // Reset form and close
+    setContent(''); setSourcePlatform('midashub'); setSourceUrl(''); setTags('');
+    setMediaFiles([]); setMediaPreviews([]); setQuote(null); setShowCompose(false);
+    
+    // Post in background (survives navigation)
+    backgroundPost(postData);
   };
 
   return (
     <div className="modal-overlay"
-      onClick={(e) => e.target === e.currentTarget && !loading && setShowCompose(false)}>
+      onClick={(e) => e.target === e.currentTarget && setShowCompose(false)}>
       <div className="modal-content max-w-lg p-5 sm:p-6">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-bold">{quote ? '💬 Repost with Comment' : 'Create Post ⚡'}</h3>
-          <button onClick={() => !loading && setShowCompose(false)} className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-white/40 hover:text-white text-sm transition">✕</button>
+          <button onClick={() => setShowCompose(false)} className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-white/40 hover:text-white text-sm transition">✕</button>
         </div>
 
         <div className="flex items-center gap-2.5 mb-3">
@@ -236,8 +211,8 @@ export default function ComposeModal() {
 
         {error && <div className="mb-3 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm">{error}</div>}
 
-        <button onClick={handlePost} disabled={!content.trim() || loading} className="btn-primary w-full py-3 flex items-center justify-center gap-2 disabled:opacity-40">
-          {loading ? <><span className="animate-spin">⏳</span> {uploadProgress || 'Posting...'}</> : quote ? '💬 Post with Quote' : 'Post to MidasHub 🚀'}
+        <button onClick={handlePost} disabled={!content.trim() || postingInBackground} className="btn-primary w-full py-3 flex items-center justify-center gap-2 disabled:opacity-40">
+          {postingInBackground ? <><span className="animate-spin">⏳</span> Posting...</> : quote ? '💬 Post with Quote' : 'Post to MidasHub 🚀'}
         </button>
       </div>
     </div>

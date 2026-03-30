@@ -7,7 +7,7 @@ import ComposeModal from '@/components/ComposeModal';
 import InstallPrompt from '@/components/InstallPrompt';
 
 export default function AppShell({ children }) {
-  const { initAuth, loading, theme, loadTheme, toast } = useStore();
+  const { initAuth, loading, theme, loadTheme, toast, postingInBackground } = useStore();
   const [forceShow, setForceShow] = useState(false);
 
   useEffect(() => {
@@ -41,6 +41,13 @@ export default function AppShell({ children }) {
       <AuthModal />
       <ComposeModal />
       <InstallPrompt />
+      {postingInBackground && (
+        <div className="fixed top-[env(safe-area-inset-top,0px)] left-0 right-0 z-[999] flex justify-center pointer-events-none" style={{ paddingTop: 'calc(4px + env(safe-area-inset-top, 0px))' }}>
+          <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-[var(--accent)] text-black text-xs font-bold shadow-lg pointer-events-auto">
+            <span className="animate-spin">⏳</span> Posting in background...
+          </div>
+        </div>
+      )}
       {toast && <div className="toast">{toast}</div>}
     </>
   );
