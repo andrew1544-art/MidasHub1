@@ -62,21 +62,27 @@ export default function RootLayout({ children }) {
             }).catch(function(){});
           }
 
-          // Soft refresh on return from background (NO hard reload)
-          // Dispatches event that pages listen to — they refetch data
+          // Smart refresh on return from background
+          // Under 10s: soft refresh (connection usually alive)
+          // Over 10s: hard reload (mobile kills connection, only reload fixes it)
           var _bg = 0;
           document.addEventListener('visibilitychange', function() {
             if (document.visibilityState === 'hidden') {
               _bg = Date.now();
-              // Save scroll position
               try {
                 sessionStorage.setItem('mh-scroll', String(window.scrollY));
                 sessionStorage.setItem('mh-path', window.location.pathname);
               } catch(e) {}
-            } else if (_bg && Date.now() - _bg > 3000) {
-              // Only dispatch refresh event — no page reload
-              window.dispatchEvent(new Event('midashub:resumed'));
+            } else if (_bg) {
+              var away = Date.now() - _bg;
               _bg = 0;
+              if (away > 10000) {
+                // Connection is dead after 10s on mobile — reload is the only fix
+                window.location.reload();
+              } else if (away > 2000) {
+                // Short absence — try soft refresh
+                window.dispatchEvent(new Event('midashub:resumed'));
+              }
             }
           });
 
