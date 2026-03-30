@@ -36,8 +36,10 @@ export default function BookmarksPage() {
   useEffect(() => {
     if (!user) return;
     const onResumed = () => fetchBookmarks();
+    const onVisible = () => { if (document.visibilityState === 'visible') fetchBookmarks(); };
     window.addEventListener('midashub:resumed', onResumed);
-    return () => window.removeEventListener('midashub:resumed', onResumed);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => { window.removeEventListener('midashub:resumed', onResumed); document.removeEventListener('visibilitychange', onVisible); };
   }, [user]);
 
   if (!user) return <AppShell><div className="max-w-2xl mx-auto px-4 py-20 text-center"><div className="text-6xl mb-4">🔖</div><h2 className="text-2xl font-bold mb-3">Log in to see bookmarks</h2><button onClick={() => setShowAuth(true)} className="btn-primary mt-4 px-8 py-3">Log In</button></div></AppShell>;

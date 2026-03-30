@@ -19,6 +19,10 @@ function FeedInner() {
   const [joiningRole, setJoiningRole] = useState(null);
   const [joinRoles, setJoinRoles] = useState([]);
   const [joining, setJoining] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [pullDistance, setPullDistance] = useState(0);
+  const touchStartY = useRef(0);
+  const isPulling = useRef(false);
   const PAGE_SIZE = 20;
   const pageRef = useRef(0);
   const hasMoreRef = useRef(true);
@@ -209,11 +213,65 @@ function FeedInner() {
     return () => window.removeEventListener('scroll', handler);
   }, [fetchPosts]);
 
-  const refreshFeed = () => { pageRef.current = 0; fetchPosts(0); };
+  const refreshFeed = useCallback(async (showIndicator = false) => {
+    if (showIndicator) setRefreshing(true);
+    pageRef.current = 0;
+    await fetchPosts(0);
+    setRefreshing(false);
+    setPullDistance(0);
+  }, [fetchPosts]);
+
+  // Auto-refresh when app returns from background
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') {
+        refreshFeed(false);
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [refreshFeed]);
+
+  // Pull-to-refresh handlers
+  const onTouchStart = useCallback((e) => {
+    if (window.scrollY <= 5) {
+      touchStartY.current = e.touches[0].clientY;
+      isPulling.current = true;
+    }
+  }, []);
+
+  const onTouchMove = useCallback((e) => {
+    if (!isPulling.current) return;
+    const diff = e.touches[0].clientY - touchStartY.current;
+    if (diff > 0 && window.scrollY <= 5) {
+      setPullDistance(Math.min(diff * 0.4, 80));
+    } else {
+      setPullDistance(0);
+    }
+  }, []);
+
+  const onTouchEnd = useCallback(() => {
+    if (pullDistance > 50) {
+      refreshFeed(true);
+    } else {
+      setPullDistance(0);
+    }
+    isPulling.current = false;
+  }, [pullDistance, refreshFeed]);
 
   return (
     <AppShell>
-      <div className="max-w-2xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
+      <div className="max-w-2xl mx-auto px-3 sm:px-4 py-4 sm:py-6"
+        onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
+
+        {/* Pull-to-refresh indicator */}
+        {(pullDistance > 0 || refreshing) && (
+          <div className="flex justify-center mb-3 transition-all" style={{ height: refreshing ? 40 : pullDistance, opacity: refreshing ? 1 : pullDistance / 60 }}>
+            <div className="flex items-center gap-2 text-xs text-[var(--accent)]">
+              {refreshing ? <><span className="animate-spin">⏳</span> Refreshing...</> : pullDistance > 50 ? '↓ Release to refresh' : '↓ Pull down to refresh'}
+            </div>
+          </div>
+        )}
         {/* Compose bar (logged in) */}
         {user && (
           <div className="glass-light rounded-2xl p-4 mb-5">
@@ -273,10 +331,13 @@ function FeedInner() {
             <h3 className="text-xl font-bold mb-2">
               {filter !== 'all' ? `No ${PLATFORM_LIST.find(([k]) => k === filter)?.[1]?.name || ''} posts yet` : 'No posts yet'}
             </h3>
-            <p className="text-white/30 text-sm mb-6">Be the first to share something!</p>
-            <button onClick={() => user ? setShowCompose(true) : setShowAuth(true, 'signup')} className="btn-primary px-8 py-3">
-              {user ? 'Create First Post ⚡' : 'Join MidasHub ⚡'}
-            </button>
+            <p className="text-white/30 text-sm mb-4">Pull down to refresh or tap below</p>
+            <div className="flex gap-2 justify-center">
+              <button onClick={() => refreshFeed(true)} className="btn-secondary px-6 py-2.5 text-sm">🔄 Refresh</button>
+              <button onClick={() => user ? setShowCompose(true) : setShowAuth(true, 'signup')} className="btn-primary px-6 py-2.5 text-sm">
+                {user ? 'Create Post ⚡' : 'Join MidasHub ⚡'}
+              </button>
+            </div>
           </div>
         ) : (
           <div className="space-y-3">

@@ -27,8 +27,10 @@ export default function PeoplePage() {
   // Refetch when app resumes from background
   useEffect(() => {
     const onResumed = () => fetchData();
+    const onVisible = () => { if (document.visibilityState === 'visible') fetchData(); };
     window.addEventListener('midashub:resumed', onResumed);
-    return () => window.removeEventListener('midashub:resumed', onResumed);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => { window.removeEventListener('midashub:resumed', onResumed); document.removeEventListener('visibilitychange', onVisible); };
   }, [user, tab]);
 
   const fetchData = async () => {
