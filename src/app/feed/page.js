@@ -112,17 +112,34 @@ function FeedInner() {
     }
   }, [searchParams, user]);
 
+  // Capture referral code from URL
+  useEffect(() => {
+    const ref = searchParams.get('ref') || searchParams.get('referral');
+    if (ref) {
+      try { localStorage.setItem('midashub-ref', ref.toUpperCase()); } catch(e) {}
+      // If not logged in, prompt signup
+      if (!user) setShowAuth(true, 'signup');
+    }
+  }, [searchParams]);
+
   // Detect join trade link
   useEffect(() => {
     const code = searchParams.get('join_trade');
-    if (!code || !user) return;
+    if (!code) return;
+    // Save code for after login if not logged in
+    if (!user) {
+      try { sessionStorage.setItem('mh-join-trade', code); } catch(e) {}
+      setShowAuth(true, 'login');
+      return;
+    }
     (async () => {
       try {
+        const { ensureFreshAuth } = await import('@/lib/supabase-browser');
+        await ensureFreshAuth();
         const sb = createClient();
-        const { data: trade } = await sb.from('trades').select('*').eq('share_code', code).maybeSingle();
+        const { data: trade, error } = await sb.from('trades').select('*').eq('share_code', code).maybeSingle();
         if (trade) {
           setJoinTrade(trade);
-          // Load available roles
           try {
             const { data: roles } = await sb.from('trade_roles').select('*').eq('is_active', true).order('display_order');
             setJoinRoles(roles?.length ? roles : [
@@ -137,6 +154,19 @@ function FeedInner() {
       window.history.replaceState({}, '', '/feed');
     })();
   }, [searchParams, user]);
+
+  // Check for saved trade code after login
+  useEffect(() => {
+    if (!user) return;
+    try {
+      const saved = sessionStorage.getItem('mh-join-trade');
+      if (saved) {
+        sessionStorage.removeItem('mh-join-trade');
+        window.history.replaceState({}, '', `/feed?join_trade=${saved}`);
+        window.location.reload();
+      }
+    } catch(e) {}
+  }, [user]);
 
   const handleJoinTrade = async () => {
     if (!joinTrade || !joiningRole || !user) return;
