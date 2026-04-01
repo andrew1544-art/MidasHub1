@@ -358,14 +358,20 @@ export const useStore = create((set, get) => ({
 
       let { error: postErr } = await supabase.from('posts').insert(postData);
       if (postErr) {
-        // Retry with fresh auth
         await ensureFreshAuth();
         const { error: retryErr } = await supabase.from('posts').insert(postData);
         if (retryErr) { get().showToast?.('❌ Post failed. Try again.'); }
-        else { get().showToast?.('Posted! ⚡'); window.dispatchEvent(new Event('midashub:newpost')); }
+        else {
+          get().showToast?.('Posted! ⚡');
+          window.dispatchEvent(new Event('midashub:newpost'));
+          // Notify friends in background
+          import('@/lib/notifications').then(m => m.notifyFriendsOfPost(user.id, finalContent)).catch(() => {});
+        }
       } else {
         get().showToast?.('Posted! ⚡');
         window.dispatchEvent(new Event('midashub:newpost'));
+        // Notify friends in background
+        import('@/lib/notifications').then(m => m.notifyFriendsOfPost(user.id, finalContent)).catch(() => {});
       }
     } catch(e) {
       get().showToast?.('❌ Post failed. Try again.');

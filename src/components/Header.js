@@ -195,22 +195,24 @@ export default function Header() {
                         {notifications.length === 0 ? (
                           <div className="text-center py-8 text-white/20 text-sm">No notifications yet</div>
                         ) : notifications.slice(0, 30).map(n => {
-                          const icon = n.type === 'like' ? '❤️' : n.type === 'comment' ? '💬' : n.type === 'friend_request' ? '👋' : n.type === 'friend_accepted' ? '🤝' : n.type === 'repost' ? '🔄' : n.type === 'viral' ? '🔥' : '🔔';
+                          const icon = n.type === 'like' ? '❤️' : n.type === 'comment' ? '💬' : n.type === 'friend_request' ? '👋' : n.type === 'friend_accepted' ? '🤝' : n.type === 'repost' ? '🔄' : n.type === 'viral' ? '🔥' : n.type === 'new_post' ? '✍️' : n.type === 'mention' ? '📣' : '🔔';
                           const message = n.content ||
                             (n.type === 'like' ? 'liked your post' :
                             n.type === 'comment' ? 'commented on your post' :
                             n.type === 'friend_request' ? 'sent you a friend request' :
                             n.type === 'friend_accepted' ? 'accepted your request' :
-                            n.type === 'repost' ? 'reposted your post' : 'new activity');
+                            n.type === 'repost' ? 'reposted your post' :
+                            n.type === 'new_post' ? 'shared a new post' :
+                            n.type === 'mention' ? 'mentioned you' : 'new activity');
                           return (
                             <div key={n.id} className={`flex gap-2.5 p-2.5 rounded-xl transition ${!n.is_read ? 'bg-white/3' : ''}`}>
                               <span className="text-lg shrink-0 mt-0.5">{icon}</span>
                               <div className="flex-1 min-w-0">
                                 <div className="flex gap-2 items-start">
-                                  <Link prefetch={false} href={`/profile//${n.from_user?.username || ''}`} className="text-xl shrink-0" onClick={() => setShowNotif(false)}>{n.from_user?.avatar_emoji || '😎'}</Link>
+                                  <Link prefetch={false} href={`/profile/${n.from_user?.username || ''}`} className="text-xl shrink-0" onClick={() => setShowNotif(false)}>{n.from_user?.avatar_emoji || '😎'}</Link>
                                   <div className="flex-1 min-w-0">
                                     <p className="text-[13px] leading-snug">
-                                      <Link prefetch={false} href={`/profile//${n.from_user?.username || ''}`} className="font-bold hover:underline" onClick={() => setShowNotif(false)}>{n.from_user?.display_name || 'Someone'}</Link>{' '}
+                                      <Link prefetch={false} href={`/profile/${n.from_user?.username || ''}`} className="font-bold hover:underline" onClick={() => setShowNotif(false)}>{n.from_user?.display_name || 'Someone'}</Link>{' '}
                                       <span className="text-white/60">{message}</span>
                                     </p>
                                     <div className="text-[10px] text-white/20 mt-0.5">{timeAgo(n.created_at)}</div>
@@ -259,7 +261,7 @@ export default function Header() {
                   </button>
                   {showMenu && (
                     <div className="absolute top-11 right-0 w-52 glass rounded-xl p-1.5 shadow-2xl">
-                      <Link prefetch={false} href={`/profile//${profile?.username}`} className="flex items-center gap-2.5 p-2.5 rounded-lg hover:bg-white/5 transition" onClick={() => setShowMenu(false)}>
+                      <Link prefetch={false} href={`/profile/${profile?.username}`} className="flex items-center gap-2.5 p-2.5 rounded-lg hover:bg-white/5 transition" onClick={() => setShowMenu(false)}>
                         <span className="text-2xl">{profile?.avatar_emoji || '😎'}</span>
                         <div className="min-w-0">
                           <div className="flex items-center gap-1.5"><span className="font-semibold text-sm truncate">{profile?.display_name}</span></div>
@@ -270,7 +272,7 @@ export default function Header() {
                         </div>
                       </Link>
                       <div className="border-t border-white/5 my-1" />
-                      <Link prefetch={false} href={`/profile//${profile?.username}`} className="block p-2 px-3 rounded-lg hover:bg-white/5 text-sm transition" onClick={() => setShowMenu(false)}>👤 Profile</Link>
+                      <Link prefetch={false} href={`/profile/${profile?.username}`} className="block p-2 px-3 rounded-lg hover:bg-white/5 text-sm transition" onClick={() => setShowMenu(false)}>👤 Profile</Link>
                       <Link prefetch={false} href="/settings" prefetch={false} className="block p-2 px-3 rounded-lg hover:bg-white/5 text-sm transition" onClick={() => setShowMenu(false)}>⚙️ Settings</Link>
                       <Link prefetch={false} href="/bookmarks" prefetch={false} className="block p-2 px-3 rounded-lg hover:bg-white/5 text-sm transition" onClick={() => setShowMenu(false)}>🔖 Saved</Link>
                       <div className="border-t border-white/5 my-1" />

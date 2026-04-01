@@ -43,6 +43,42 @@ export async function sendMessagePush(toUserId, fromName, messagePreview) {
   sendPush(toUserId, `${fromName} 💬`, body, '/chat');
 }
 
+// Notify all friends when user makes a new post
+export async function notifyFriendsOfPost(userId, postPreview) {
+  try {
+    const supabase = createClient();
+    // Get user's name
+    const { data: poster } = await supabase.from('profiles').select('display_name').eq('id', userId).maybeSingle();
+    const name = poster?.display_name || 'Someone';
+
+    // Get all accepted friends (both directions)
+    const [{ data: sent }, { data: received }] = await Promise.all([
+      supabase.from('friendships').select('addressee_id').eq('requester_id', userId).eq('status', 'accepted'),
+      supabase.from('friendships').select('requester_id').eq('addressee_id', userId).eq('status', 'accepted'),
+    ]);
+
+    const friendIds = [
+      ...new Set([
+        ...(sent || []).map(f => f.addressee_id),
+        ...(received || []).map(f => f.requester_id),
+      ])
+    ];
+
+    if (!friendIds.length) return;
+
+    const preview = postPreview.length > 50 ? postPreview.slice(0, 50) + '...' : postPreview;
+
+    // Save notification + send push to each friend
+    const notifs = friendIds.map(fid => ({
+      user_id: fid, from_user_id: userId, type: 'new_post',
+      content: `posted: "${preview}"`,
+    }));
+
+    await supabase.from('notifications').insert(notifs);
+    friendIds.forEach(fid => sendPush(fid, `${name} posted ✍️`, preview, '/feed'));
+  } catch(e) { console.warn('Friend post notify failed:', e.message); }
+}
+
 // Alert ALL admins
 export async function alertAdmins({ fromUserId, type, content = '', referenceId = null }) {
   try {
