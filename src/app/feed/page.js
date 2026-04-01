@@ -316,27 +316,39 @@ function FeedInner() {
             </div>
           </div>
         )}
-        {/* Install app banner */}
+        {/* Install app banner with video preview */}
         {showAppBanner && (
-          <div className="glass-light rounded-2xl p-3 mb-3 flex items-center gap-3">
-            <span className="text-2xl">📱</span>
-            <div className="flex-1 min-w-0">
-              <div className="text-sm font-bold">Add to Home Screen</div>
-              <div className="text-[10px] text-white/30">Get the full app experience</div>
+          <div className="glass-light rounded-2xl overflow-hidden mb-3">
+            {tutorialUrl && (
+              <div className="relative cursor-pointer group" onClick={() => setShowTutorial(true)}>
+                <video src={tutorialUrl} muted playsInline preload="metadata" className="w-full" style={{ maxHeight: '160px', objectFit: 'cover' }}
+                  onLoadedMetadata={e => { e.target.currentTime = 0.5; }} />
+                <div className="absolute inset-0 bg-black/40 flex items-center justify-center group-hover:bg-black/30 transition">
+                  <div className="w-12 h-12 rounded-full bg-[var(--accent)] flex items-center justify-center shadow-lg">
+                    <span className="text-black text-lg ml-0.5">▶</span>
+                  </div>
+                </div>
+              </div>
+            )}
+            <div className="p-3 flex items-center gap-3">
+              <span className="text-xl">📱</span>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-bold">Add MidasHub to Home Screen</div>
+                <div className="text-[10px] text-white/30">{tutorialUrl ? 'Tap video to watch how' : 'Get the full app experience'}</div>
+              </div>
+              <button onClick={() => { setShowAppBanner(false); try { localStorage.setItem('mh-app-banner-dismiss', Date.now().toString()); } catch(e) {} }} className="text-white/20 text-xs shrink-0">✕</button>
             </div>
-            {tutorialUrl && <button onClick={() => setShowTutorial(true)} className="text-[var(--accent)] text-xs font-semibold shrink-0">▶ How</button>}
-            <button onClick={() => { setShowAppBanner(false); try { localStorage.setItem('mh-app-banner-dismiss', Date.now().toString()); } catch(e) {} }} className="text-white/20 text-xs shrink-0">✕</button>
           </div>
         )}
 
         {/* Tutorial video modal */}
         {showTutorial && tutorialUrl && (
-          <div className="fixed inset-0 bg-black/90 z-[9999] flex items-center justify-center p-4" onClick={() => setShowTutorial(false)}>
-            <div className="relative max-w-lg w-full" onClick={e => e.stopPropagation()}>
-              <button onClick={() => setShowTutorial(false)} className="absolute -top-10 right-0 text-white/50 text-2xl hover:text-white">✕</button>
+          <div className="fixed inset-0 bg-black/95 z-[9999] flex items-center justify-center p-3" onClick={() => setShowTutorial(false)}>
+            <div className="relative max-w-md w-full" onClick={e => e.stopPropagation()}>
+              <button onClick={() => setShowTutorial(false)} className="absolute -top-10 right-0 text-white/60 text-2xl hover:text-white z-10">✕</button>
               <div className="text-center mb-3"><span className="text-sm font-bold">📱 How to add MidasHub to Home Screen</span></div>
-              <video src={tutorialUrl} controls autoPlay playsInline className="w-full rounded-2xl" style={{ maxHeight: '75vh' }} />
-              <p className="text-center text-xs text-white/30 mt-3">Tap share → &quot;Add to Home Screen&quot;</p>
+              <video src={tutorialUrl} controls autoPlay playsInline className="w-full rounded-2xl shadow-2xl" style={{ maxHeight: '75vh' }} />
+              <p className="text-center text-[11px] text-white/25 mt-3">Tap share → &quot;Add to Home Screen&quot;</p>
             </div>
           </div>
         )}

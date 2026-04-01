@@ -288,28 +288,31 @@ function HomeInner() {
               <h2 className="text-2xl sm:text-3xl font-black mt-3 mb-2">Add MidasHub to your <span className="accent-text">Home Screen</span></h2>
               <p className="text-sm text-white/35 mb-6 max-w-md mx-auto">Works like a real app — instant access, push notifications, and full-screen experience. Watch how:</p>
 
-              <button onClick={() => setShowTutorial(true)}
-                className="relative inline-block rounded-2xl overflow-hidden border border-white/10 hover:border-[var(--accent)]/30 transition group cursor-pointer">
-                <div className="w-64 h-44 sm:w-80 sm:h-52 bg-white/3 flex items-center justify-center">
-                  <div className="w-16 h-16 rounded-full bg-[var(--accent)]/20 flex items-center justify-center group-hover:scale-110 transition-transform">
-                    <span className="text-3xl ml-1">▶️</span>
+              <div className="relative inline-block rounded-2xl overflow-hidden border border-white/10 hover:border-[var(--accent)]/30 transition cursor-pointer group max-w-sm mx-auto"
+                onClick={() => setShowTutorial(true)}>
+                <video src={tutorialUrl} muted playsInline preload="metadata" className="w-full rounded-2xl" style={{ maxHeight: '360px' }}
+                  onLoadedMetadata={e => { e.target.currentTime = 0.5; }} />
+                <div className="absolute inset-0 bg-black/30 flex items-center justify-center group-hover:bg-black/20 transition">
+                  <div className="w-16 h-16 rounded-full bg-[var(--accent)] flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                    <span className="text-black text-2xl ml-1">▶</span>
                   </div>
                 </div>
-                <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-3">
-                  <span className="text-xs font-bold">📱 How to install MidasHub</span>
+                <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4">
+                  <span className="text-sm font-bold">📱 How to install MidasHub</span>
+                  <span className="block text-[10px] text-white/40 mt-0.5">Tap to watch tutorial</span>
                 </div>
-              </button>
+              </div>
             </div>
           </section>
         )}
 
         {/* Tutorial video modal */}
         {showTutorial && tutorialUrl && (
-          <div className="fixed inset-0 bg-black/90 z-[9999] flex items-center justify-center p-4" onClick={() => setShowTutorial(false)}>
-            <div className="relative max-w-lg w-full" onClick={e => e.stopPropagation()}>
-              <button onClick={() => setShowTutorial(false)} className="absolute -top-10 right-0 text-white/50 text-2xl hover:text-white">✕</button>
-              <video src={tutorialUrl} controls autoPlay playsInline className="w-full rounded-2xl" style={{ maxHeight: '80vh' }} />
-              <p className="text-center text-xs text-white/30 mt-3">Tap the share button → &quot;Add to Home Screen&quot;</p>
+          <div className="fixed inset-0 bg-black/95 z-[9999] flex items-center justify-center p-3" onClick={() => setShowTutorial(false)}>
+            <div className="relative max-w-md w-full" onClick={e => e.stopPropagation()}>
+              <button onClick={() => setShowTutorial(false)} className="absolute -top-10 right-0 text-white/60 text-2xl hover:text-white z-10">✕</button>
+              <video src={tutorialUrl} controls autoPlay playsInline className="w-full rounded-2xl shadow-2xl" style={{ maxHeight: '80vh' }} />
+              <p className="text-center text-[11px] text-white/25 mt-3">Tap share → &quot;Add to Home Screen&quot;</p>
             </div>
           </div>
         )}
