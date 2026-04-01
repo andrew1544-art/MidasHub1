@@ -18,6 +18,7 @@ export default function PeoplePage() {
   const [tab, setTab] = useState('discover');
   const [friendIds, setFriendIds] = useState(new Set());
   const [pendingIds, setPendingIds] = useState(new Set());
+  const [incomingIds, setIncomingIds] = useState(new Set());
 
   useEffect(() => {
     const safety = setTimeout(() => setLoading(false), 3000);
@@ -40,13 +41,14 @@ export default function PeoplePage() {
       let results = (data || []).filter(p => p.id !== user?.id);
       if (user) {
         const { data: ships } = await supabase.from('friendships').select('*').or(`requester_id.eq.${user.id},addressee_id.eq.${user.id}`);
-        const fIds = new Set(), pIds = new Set();
+        const fIds = new Set(), pIds = new Set(), incomingIds = new Set();
         (ships || []).forEach(f => {
           const other = f.requester_id === user.id ? f.addressee_id : f.requester_id;
           if (f.status === 'accepted') fIds.add(other);
           if (f.status === 'pending' && f.requester_id === user.id) pIds.add(other);
+          if (f.status === 'pending' && f.addressee_id === user.id) incomingIds.add(other);
         });
-        setFriendIds(fIds); setPendingIds(pIds);
+        setFriendIds(fIds); setPendingIds(pIds); setIncomingIds(incomingIds);
       }
       setPeople(results);
     } else if (tab === 'friends' && user) {
@@ -68,6 +70,19 @@ export default function PeoplePage() {
     if (!user) return setShowAuth(true);
     await ensureFreshAuth();
     const supabase = createClient();
+    // Check if they already sent US a request
+    const { data: existing } = await supabase.from('friendships').select('*')
+      .eq('requester_id', id).eq('addressee_id', user.id).eq('status', 'pending').maybeSingle();
+    if (existing) {
+      // Auto-accept their request
+      await supabase.from('friendships').update({ status: 'accepted' }).eq('id', existing.id);
+      setRequests(prev => prev.filter(r => r.id !== existing.id));
+      setIncomingIds(prev => { const n = new Set(prev); n.delete(id); return n; });
+      setFriendIds(prev => new Set([...prev, id]));
+      sendNotification({ toUserId: id, fromUserId: user.id, type: 'friend_accepted', content: 'accepted your friend request 🤝' });
+      showToast('You\'re now friends! 🤝');
+      return;
+    }
     await supabase.from('friendships').insert({ requester_id: user.id, addressee_id: id });
     setPendingIds(prev => new Set([...prev, id]));
     sendNotification({ toUserId: id, fromUserId: user.id, type: 'friend_request', content: 'sent you a friend request 👋' });
@@ -110,6 +125,8 @@ export default function PeoplePage() {
             <span className="flex-1 py-2.5 rounded-xl bg-green-500/10 text-green-400 text-xs font-semibold text-center">✓ Friends</span>
           ) : pendingIds.has(person.id) ? (
             <span className="flex-1 py-2.5 rounded-xl bg-white/5 text-white/25 text-xs font-semibold text-center">⏳ Pending</span>
+          ) : incomingIds.has(person.id) ? (
+            <button onClick={() => sendRequest(person.id)} className="flex-1 py-2.5 rounded-xl btn-primary text-xs">✓ Accept</button>
           ) : (
             <button onClick={() => sendRequest(person.id)} className="flex-1 py-2.5 rounded-xl btn-primary text-xs">+ Add Friend</button>
           )}

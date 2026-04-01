@@ -88,6 +88,18 @@ export default function ProfilePage() {
     if (!user) return setShowAuth(true);
     const supabase = createClient();
     if (friendStatus === 'none') {
+      // FIRST: check if they already sent US a request
+      const { data: existing } = await supabase.from('friendships').select('*')
+        .eq('requester_id', prof.id).eq('addressee_id', user.id).eq('status', 'pending').maybeSingle();
+      if (existing) {
+        // They already sent us a request — auto-accept it
+        await supabase.from('friendships').update({ status: 'accepted' }).eq('id', existing.id);
+        setFriendStatus('friends'); setFriendshipId(existing.id);
+        showToast('You\'re now friends! 🤝');
+        sendNotification({ toUserId: prof.id, fromUserId: user.id, type: 'friend_accepted', content: 'accepted your friend request 🤝' });
+        return;
+      }
+      // No existing request — send new one
       const { data } = await supabase.from('friendships').insert({ requester_id: user.id, addressee_id: prof.id }).select().single();
       if (data) { setFriendStatus('pending_sent'); setFriendshipId(data.id);
         sendNotification({ toUserId: prof.id, fromUserId: user.id, type: 'friend_request', content: 'sent you a friend request 👋' });
@@ -97,6 +109,7 @@ export default function ProfilePage() {
       await supabase.from('friendships').update({ status: 'accepted' }).eq('id', friendshipId);
       setFriendStatus('friends');
       showToast('Friend request accepted ✓');
+      sendNotification({ toUserId: prof.id, fromUserId: user.id, type: 'friend_accepted', content: 'accepted your friend request 🤝' });
     } else if (friendStatus === 'friends' || friendStatus === 'pending_sent') {
       await supabase.from('friendships').delete().eq('id', friendshipId);
       setFriendStatus('none'); setFriendshipId(null);
