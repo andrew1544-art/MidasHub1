@@ -140,7 +140,13 @@ export default function EditPostModal({ post, onClose, onSaved }) {
               return (
                 <div key={`ex-${i}`} className="relative aspect-video rounded-xl overflow-hidden bg-white/5">
                   {isVid ? (
-                    <video src={url} className="w-full h-full object-cover" preload="metadata" />
+                    <>
+                      <video src={url} className="w-full h-full object-cover" preload="metadata" muted playsInline
+                        onLoadedMetadata={e => { e.target.currentTime = 0.5; }} />
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                        <div className="w-8 h-8 rounded-full bg-[var(--accent)] flex items-center justify-center"><span className="text-black text-xs ml-0.5">▶</span></div>
+                      </div>
+                    </>
                   ) : (
                     <img src={url} alt="" className="w-full h-full object-cover" />
                   )}
@@ -153,7 +159,11 @@ export default function EditPostModal({ post, onClose, onSaved }) {
               <div key={`new-${i}`} className="relative aspect-video rounded-xl overflow-hidden bg-white/5">
                 {item.isVideo ? (
                   <>
-                    <video src={item.url} className="w-full h-full object-cover" preload="metadata" />
+                    <video src={item.url} className="w-full h-full object-cover" preload="metadata" muted playsInline
+                      onLoadedMetadata={e => { e.target.currentTime = 0.5; }} />
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                      <div className="w-8 h-8 rounded-full bg-[var(--accent)] flex items-center justify-center"><span className="text-black text-xs ml-0.5">▶</span></div>
+                    </div>
                     <div className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded bg-black/60 text-[9px] text-white/70 font-semibold">NEW</div>
                   </>
                 ) : (

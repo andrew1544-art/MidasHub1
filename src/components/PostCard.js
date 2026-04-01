@@ -470,9 +470,12 @@ export default function PostCard({ post, onPostUpdated }) {
                   onClick={() => { setViewerIndex(i); setViewerOpen(true); }}>
                   {isVid ? (
                     <>
-                      <video src={url} className="w-full h-full object-cover" preload="metadata" muted />
-                      <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/30 transition">
-                        <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur flex items-center justify-center text-xl">▶</div>
+                      <video src={url} className="w-full h-full object-cover" preload="metadata" muted playsInline
+                        onLoadedMetadata={e => { e.target.currentTime = 0.5; }} />
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/30 group-hover:bg-black/20 transition">
+                        <div className="w-12 h-12 rounded-full bg-[var(--accent)] flex items-center justify-center shadow-lg">
+                          <span className="text-black text-lg ml-0.5">▶</span>
+                        </div>
                       </div>
                     </>
                   ) : (

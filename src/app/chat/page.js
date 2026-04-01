@@ -351,7 +351,18 @@ function ChatInner() {
                         {media ? (
                           <div className={`max-w-[75%] p-1 rounded-2xl ${isMine?'accent-gradient rounded-br-md':'bg-white/8 rounded-bl-md'}`}>
                             {media.type === 'image' && <img src={media.url} alt="" className="rounded-xl max-w-full max-h-64 object-cover cursor-pointer" onClick={() => window.open(media.url, '_blank')} loading="lazy" />}
-                            {media.type === 'video' && <video src={media.url} controls className="rounded-xl max-w-full max-h-64" preload="metadata" playsInline />}
+                            {media.type === 'video' && (
+                              <div className="relative cursor-pointer group" onClick={e => { const v = e.currentTarget.querySelector('video'); if (v.paused) v.play(); else v.pause(); }}>
+                                <video src={media.url} className="rounded-xl max-w-full max-h-64" preload="metadata" playsInline muted
+                                  onLoadedMetadata={e => { e.target.currentTime = 0.5; }}
+                                  onPlay={e => { e.target.muted = false; e.target.controls = true; e.target.parentElement.querySelector('.play-btn')?.remove(); }} />
+                                <div className="play-btn absolute inset-0 flex items-center justify-center bg-black/30 rounded-xl">
+                                  <div className="w-10 h-10 rounded-full bg-[var(--accent)] flex items-center justify-center shadow-lg">
+                                    <span className="text-black text-sm ml-0.5">▶</span>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
                             <div className={`text-[10px] px-2 py-0.5 ${isMine?'text-black/40':'text-white/20'}`}>{timeAgo(msg.created_at)}</div>
                           </div>
                         ) : (

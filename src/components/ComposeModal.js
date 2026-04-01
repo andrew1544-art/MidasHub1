@@ -190,11 +190,15 @@ export default function ComposeModal() {
               <div key={i} className="relative aspect-video rounded-xl overflow-hidden bg-white/5">
                 {item.isVideo ? (
                   <>
-                    <video src={item.url} className="w-full h-full object-cover" preload="metadata" />
+                    <video src={item.url} className="w-full h-full object-cover" preload="metadata" muted playsInline
+                      onLoadedMetadata={e => { e.target.currentTime = 0.5; }} />
                     <div className="absolute inset-0 flex items-center justify-center bg-black/30">
-                      <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-lg">▶</div>
+                      <div className="w-10 h-10 rounded-full bg-[var(--accent)] flex items-center justify-center shadow-lg">
+                        <span className="text-black text-sm ml-0.5">▶</span>
+                      </div>
                     </div>
                     <div className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded bg-black/60 text-[9px] text-white/70 font-semibold">VIDEO</div>
+                    {item.size && <div className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded bg-black/60 text-[9px] text-white/50">{item.size}</div>}
                   </>
                 ) : (
                   <img src={item.url} alt="" className="w-full h-full object-cover" />
