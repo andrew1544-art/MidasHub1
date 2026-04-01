@@ -27,10 +27,25 @@ function HomeInner() {
   const searchParams = useSearchParams();
   const [mounted, setMounted] = useState(false);
   const [visibleCards, setVisibleCards] = useState(0);
+  const [tutorialUrl, setTutorialUrl] = useState('');
+  const [showTutorial, setShowTutorial] = useState(false);
 
   useEffect(() => { setMounted(true); }, []);
   useEffect(() => { if (user) router.push('/feed'); }, [user, router]);
   useEffect(() => { if (searchParams.get('verified') === 'true') setShowAuth(true, 'login'); }, [searchParams, setShowAuth]);
+
+  // Load tutorial video URL
+  useEffect(() => {
+    (async () => {
+      try {
+        const { createClient } = await import('@/lib/supabase-browser');
+        const sb = createClient();
+        const { data } = await sb.storage.from('media').list('site', { limit: 10 });
+        const tut = (data||[]).find(f => f.name.startsWith('tutorial'));
+        if (tut) { const { data: u } = sb.storage.from('media').getPublicUrl('site/' + tut.name); setTutorialUrl(u.publicUrl); }
+      } catch(e) {}
+    })();
+  }, []);
 
   // Returning user — skip landing, go to feed
   useEffect(() => {
@@ -264,6 +279,40 @@ function HomeInner() {
             </div>
           </div>
         </section>
+
+        {/* ===== INSTALL TUTORIAL ===== */}
+        {tutorialUrl && (
+          <section className="py-12 sm:py-16">
+            <div className="max-w-3xl mx-auto px-4 text-center">
+              <span className="text-xs font-bold tracking-widest uppercase text-white/20">Get the app</span>
+              <h2 className="text-2xl sm:text-3xl font-black mt-3 mb-2">Add MidasHub to your <span className="accent-text">Home Screen</span></h2>
+              <p className="text-sm text-white/35 mb-6 max-w-md mx-auto">Works like a real app — instant access, push notifications, and full-screen experience. Watch how:</p>
+
+              <button onClick={() => setShowTutorial(true)}
+                className="relative inline-block rounded-2xl overflow-hidden border border-white/10 hover:border-[var(--accent)]/30 transition group cursor-pointer">
+                <div className="w-64 h-44 sm:w-80 sm:h-52 bg-white/3 flex items-center justify-center">
+                  <div className="w-16 h-16 rounded-full bg-[var(--accent)]/20 flex items-center justify-center group-hover:scale-110 transition-transform">
+                    <span className="text-3xl ml-1">▶️</span>
+                  </div>
+                </div>
+                <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-3">
+                  <span className="text-xs font-bold">📱 How to install MidasHub</span>
+                </div>
+              </button>
+            </div>
+          </section>
+        )}
+
+        {/* Tutorial video modal */}
+        {showTutorial && tutorialUrl && (
+          <div className="fixed inset-0 bg-black/90 z-[9999] flex items-center justify-center p-4" onClick={() => setShowTutorial(false)}>
+            <div className="relative max-w-lg w-full" onClick={e => e.stopPropagation()}>
+              <button onClick={() => setShowTutorial(false)} className="absolute -top-10 right-0 text-white/50 text-2xl hover:text-white">✕</button>
+              <video src={tutorialUrl} controls autoPlay playsInline className="w-full rounded-2xl" style={{ maxHeight: '80vh' }} />
+              <p className="text-center text-xs text-white/30 mt-3">Tap the share button → &quot;Add to Home Screen&quot;</p>
+            </div>
+          </div>
+        )}
 
         {/* ===== FEATURES GRID ===== */}
         <section className="py-16 sm:py-24" style={{ background: 'rgba(255,255,255,0.01)' }}>

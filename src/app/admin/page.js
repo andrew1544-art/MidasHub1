@@ -24,6 +24,8 @@ export default function AdminPage() {
   const [tradeRoles, setTradeRoles] = useState([]);
   const [feedbackList, setFeedbackList] = useState([]);
   const [topReferrers, setTopReferrers] = useState([]);
+  const [tutorialUrl, setTutorialUrl] = useState('');
+  const [uploadingTut, setUploadingTut] = useState(false);
   const [newRole, setNewRole] = useState({ name: '', icon: '👤', description: '' });
   const [loading, setLoading] = useState(true);
   const [editingEscrow, setEditingEscrow] = useState(null);
@@ -126,6 +128,16 @@ export default function AdminPage() {
           } else { setFeedbackList([]); }
         } catch(e) { setFeedbackList([]); }
       }
+      if (tab === 'site') {
+        try {
+          const { data } = await supabase.storage.from('media').list('site', { limit: 10 });
+          const tut = (data||[]).find(f => f.name.startsWith('tutorial'));
+          if (tut) {
+            const { data: u } = supabase.storage.from('media').getPublicUrl('site/' + tut.name);
+            setTutorialUrl(u.publicUrl);
+          } else { setTutorialUrl(''); }
+        } catch(e) {}
+      }
     } catch (e) { console.error('Admin load error:', e); }
     setLoading(false);
   };
@@ -202,6 +214,7 @@ export default function AdminPage() {
     { key: 'roles', label: '🎭 Roles' },
     { key: 'feedback', label: '💡 Feedback' },
     { key: 'referrals', label: '🔗 Referrals' },
+    { key: 'site', label: '🎬 Site' },
     { key: 'diagnostics', label: '🔧 Test' },
     { key: 'posts', label: '📝 Posts' },
   ];
@@ -731,6 +744,67 @@ export default function AdminPage() {
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+
+            {/* ===== SITE SETTINGS ===== */}
+            {tab === 'site' && (
+              <div className="space-y-6">
+                <div className="glass-light rounded-xl p-5">
+                  <h3 className="font-bold text-base mb-1">🎬 Tutorial Video</h3>
+                  <p className="text-xs text-white/30 mb-4">Upload a video showing users how to add the app to their home screen. It will appear on the landing page and feed.</p>
+
+                  {tutorialUrl ? (
+                    <div className="space-y-3">
+                      <video src={tutorialUrl} controls className="w-full rounded-xl border border-white/10" style={{ maxHeight: '300px' }} />
+                      <div className="flex gap-2">
+                        <label className="btn-primary py-2 px-4 text-xs cursor-pointer flex-1 text-center">
+                          🔄 Replace Video
+                          <input type="file" accept="video/*" className="hidden" onChange={async (e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            setUploadingTut(true);
+                            try {
+                              // Delete old
+                              const { data: old } = await supabase.storage.from('media').list('site');
+                              if (old?.length) await supabase.storage.from('media').remove(old.map(f => 'site/' + f.name));
+                              // Upload new
+                              const ext = file.name.split('.').pop();
+                              const { data, error } = await supabase.storage.from('media').upload(`site/tutorial.${ext}`, file, { contentType: file.type, upsert: true });
+                              if (data && !error) { const { data: u } = supabase.storage.from('media').getPublicUrl(data.path); setTutorialUrl(u.publicUrl); }
+                            } catch(err) {}
+                            setUploadingTut(false);
+                          }} />
+                        </label>
+                        <button onClick={async () => {
+                          if (!confirm('Remove tutorial video?')) return;
+                          const { data: old } = await supabase.storage.from('media').list('site');
+                          if (old?.length) await supabase.storage.from('media').remove(old.map(f => 'site/' + f.name));
+                          setTutorialUrl('');
+                        }} className="text-xs px-4 py-2 rounded-lg bg-red-500/10 text-red-400">🗑️ Remove</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <label className={`block w-full py-12 rounded-xl border-2 border-dashed border-white/10 hover:border-[var(--accent)]/30 text-center cursor-pointer transition ${uploadingTut ? 'opacity-50' : ''}`}>
+                      {uploadingTut ? (
+                        <><span className="animate-spin text-2xl block mb-2">⏳</span><span className="text-sm text-white/40">Uploading video...</span></>
+                      ) : (
+                        <><span className="text-4xl block mb-2">🎬</span><span className="text-sm text-white/40">Tap to upload tutorial video</span><br/><span className="text-[10px] text-white/20">MP4, MOV, WebM — max 50MB</span></>
+                      )}
+                      <input type="file" accept="video/*" className="hidden" disabled={uploadingTut} onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        setUploadingTut(true);
+                        try {
+                          const ext = file.name.split('.').pop();
+                          const { data, error } = await supabase.storage.from('media').upload(`site/tutorial.${ext}`, file, { contentType: file.type, upsert: true });
+                          if (data && !error) { const { data: u } = supabase.storage.from('media').getPublicUrl(data.path); setTutorialUrl(u.publicUrl); }
+                        } catch(err) {}
+                        setUploadingTut(false);
+                      }} />
+                    </label>
+                  )}
+                </div>
               </div>
             )}
 

@@ -29,12 +29,24 @@ function FeedInner() {
   const [hasDraft, setHasDraft] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [showAppBanner, setShowAppBanner] = useState(false);
+  const [tutorialUrl, setTutorialUrl] = useState('');
+  const [showTutorial, setShowTutorial] = useState(false);
   useEffect(() => {
     try { setHasDraft(!!sessionStorage.getItem('mh-draft')); } catch(e) {}
-    // Show "Open in App" if user is in browser but has PWA installed
     const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
     const dismissed = localStorage.getItem('mh-app-banner-dismiss');
     if (!isStandalone && !dismissed) setShowAppBanner(true);
+    // Load tutorial video
+    if (!isStandalone) {
+      (async () => {
+        try {
+          const sb = createClient();
+          const { data } = await sb.storage.from('media').list('site', { limit: 10 });
+          const tut = (data||[]).find(f => f.name.startsWith('tutorial'));
+          if (tut) { const { data: u } = sb.storage.from('media').getPublicUrl('site/' + tut.name); setTutorialUrl(u.publicUrl); }
+        } catch(e) {}
+      })();
+    }
   }, []);
   const [pullDistance, setPullDistance] = useState(0);
   const touchStartY = useRef(0);
@@ -304,16 +316,28 @@ function FeedInner() {
             </div>
           </div>
         )}
-        {/* Open in App banner */}
+        {/* Install app banner */}
         {showAppBanner && (
           <div className="glass-light rounded-2xl p-3 mb-3 flex items-center gap-3">
-            <span className="text-2xl">⚡</span>
+            <span className="text-2xl">📱</span>
             <div className="flex-1 min-w-0">
-              <div className="text-sm font-bold">MidasHub App</div>
-              <div className="text-[10px] text-white/30">Open in the app for a better experience</div>
+              <div className="text-sm font-bold">Add to Home Screen</div>
+              <div className="text-[10px] text-white/30">Get the full app experience</div>
             </div>
-            <button onClick={() => { window.location.href = window.location.href; }} className="btn-primary px-3 py-1.5 text-xs shrink-0">Open App</button>
+            {tutorialUrl && <button onClick={() => setShowTutorial(true)} className="text-[var(--accent)] text-xs font-semibold shrink-0">▶ How</button>}
             <button onClick={() => { setShowAppBanner(false); try { localStorage.setItem('mh-app-banner-dismiss', Date.now().toString()); } catch(e) {} }} className="text-white/20 text-xs shrink-0">✕</button>
+          </div>
+        )}
+
+        {/* Tutorial video modal */}
+        {showTutorial && tutorialUrl && (
+          <div className="fixed inset-0 bg-black/90 z-[9999] flex items-center justify-center p-4" onClick={() => setShowTutorial(false)}>
+            <div className="relative max-w-lg w-full" onClick={e => e.stopPropagation()}>
+              <button onClick={() => setShowTutorial(false)} className="absolute -top-10 right-0 text-white/50 text-2xl hover:text-white">✕</button>
+              <div className="text-center mb-3"><span className="text-sm font-bold">📱 How to add MidasHub to Home Screen</span></div>
+              <video src={tutorialUrl} controls autoPlay playsInline className="w-full rounded-2xl" style={{ maxHeight: '75vh' }} />
+              <p className="text-center text-xs text-white/30 mt-3">Tap share → &quot;Add to Home Screen&quot;</p>
+            </div>
           </div>
         )}
 
