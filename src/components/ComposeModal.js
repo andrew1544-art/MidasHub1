@@ -1,7 +1,7 @@
 'use client';
 import { useState, useRef, useEffect } from 'react';
 import { useStore } from '@/lib/store';
-import { createClient, ensureFreshAuth } from '@/lib/supabase-browser';
+import { createClient, ensureFreshAuth, ensureAlive } from '@/lib/supabase-browser';
 import { PLATFORMS, PLATFORM_LIST } from '@/lib/constants';
 import { compressImage, checkVideoSize, formatSize } from '@/lib/media';
 
@@ -92,6 +92,9 @@ export default function ComposeModal() {
   const handlePost = async () => {
     if (!content.trim() || uploading) return;
     setError('');
+    
+    // Check connection is alive before doing anything
+    await ensureAlive();
     
     let mediaUrls = [];
     let hasVideo = false;
