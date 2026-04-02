@@ -63,14 +63,14 @@ async function trackSession(supabase, userId) {
     const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
     const language = navigator.language || '';
 
-    // Get IP + location from free API
+    // Get IP + location from free API (CORS-friendly)
     let ip = '', country = '', city = '';
     try {
-      const res = await fetch('https://ipapi.co/json/', { signal: AbortSignal.timeout(3000) });
+      const res = await fetch('https://ip-api.com/json/?fields=query,country,city', { signal: AbortSignal.timeout(3000) });
       if (res.ok) {
         const geo = await res.json();
-        ip = geo.ip || '';
-        country = geo.country_name || '';
+        ip = geo.query || '';
+        country = geo.country || '';
         city = geo.city || '';
       }
     } catch(e) {}

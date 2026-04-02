@@ -7,11 +7,23 @@ const VAPID_PUBLIC = 'BEUwvEX0AosCeqokhBC04Mjp17WryT_DEnG_aPwBWaqZ1ENQmQGRHADql_
 const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY || '';
 
 function getSupabase() {
-  const { createClient } = require('@supabase/supabase-js');
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) return null;
-  return createClient(url, key);
+  try {
+    const { createClient } = require('@supabase/supabase-js');
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!url || !key) return null;
+    return createClient(url, key);
+  } catch(e) { return null; }
+}
+
+function getWebPush() {
+  try {
+    const webpush = require('web-push');
+    if (VAPID_PRIVATE) {
+      webpush.setVapidDetails('mailto:admin@midashub.app', VAPID_PUBLIC, VAPID_PRIVATE);
+    }
+    return webpush;
+  } catch(e) { return null; }
 }
 
 // POST — send push notification to a user
@@ -28,8 +40,8 @@ export async function POST(request) {
     if (fetchErr) return NextResponse.json({ error: 'DB error: ' + fetchErr.message, sent: 0 });
     if (!subs?.length) return NextResponse.json({ sent: 0, reason: 'no subscriptions found' });
 
-    const webpush = require('web-push');
-    webpush.setVapidDetails('mailto:admin@midashub.app', VAPID_PUBLIC, VAPID_PRIVATE);
+    const webpush = getWebPush();
+    if (!webpush) return NextResponse.json({ error: 'web-push not available' }, { status: 500 });
 
     const payload = JSON.stringify({
       title: title || 'MidasHub ⚡',
